@@ -44,6 +44,28 @@ export const VARIANTS: Record<string, Variant> = {
     }),
   },
 
+  "gold-storage-off": {
+    name: "gold-storage-off",
+    description:
+      "Treasury ceiling effectively removed — the control for Ideenliste 9",
+    overrides: () => ({
+      goldStorageFloor: () => 10n ** 30n,
+      maxGold: () => 10n ** 30n,
+    }),
+  },
+
+  "gold-storage-tight": {
+    name: "gold-storage-tight",
+    description:
+      "Treasury ceiling at a tenth of the default (Ideenliste 9 calibration)",
+    overrides: (base) => ({
+      goldStorageBase: () => base.goldStorageBase() / 10n,
+      goldStoragePerCity: () => base.goldStoragePerCity() / 10n,
+      goldStorageFloor: () => base.goldStorageFloor() / 10n,
+      mirvMaxCost: () => base.mirvMaxCost() / 10n,
+    }),
+  },
+
   "sam-fast": {
     name: "sam-fast",
     description: "SAM cooldown halved (90 -> 45 ticks)",
