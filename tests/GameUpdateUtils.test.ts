@@ -11,6 +11,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "../src/core/game/GameUpdates";
+import { emptyIndustryUpdate } from "../src/core/game/Industry";
 import { makePlayerUpdate } from "./util/viewStubs";
 
 function makePlayerState(overrides: Partial<PlayerState> = {}): PlayerState {
@@ -38,6 +39,7 @@ function makePlayerState(overrides: Partial<PlayerState> = {}): PlayerState {
     outgoingAllianceRequests: [],
     alliances: [],
     outgoingEmojis: [],
+    industry: emptyIndustryUpdate(),
     ...overrides,
   };
 }

@@ -9,6 +9,7 @@ import {
   UT_MIRV_WARHEAD,
   UT_TRANSPORT,
 } from "../src/client/render/types/UnitType";
+import { CityRole } from "../src/core/game/Industry";
 
 const W = 64;
 
@@ -45,6 +46,8 @@ function makeUnit(
     troops: 0,
     missileTimerQueue: [],
     level: 1,
+    cityRole: CityRole.Unspecialized,
+    isCapital: false,
     veterancy: 0,
     hasTrainStation: false,
     trainType: null,

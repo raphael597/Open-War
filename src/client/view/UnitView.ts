@@ -7,6 +7,7 @@ import {
 } from "../../core/game/Game";
 import { TileRef } from "../../core/game/GameMap";
 import { UnitUpdate } from "../../core/game/GameUpdates";
+import { CityRole } from "../../core/game/Industry";
 import type { UnitState } from "../render/types";
 import { TrainType as RendererTrainType } from "../render/types";
 import { GameView } from "./GameView";
@@ -65,6 +66,8 @@ function unitStateFromUpdate(u: UnitUpdate): UnitState {
     troops: u.troops,
     missileTimerQueue: u.missileTimerQueue,
     level: u.level,
+    cityRole: u.cityRole ?? CityRole.Unspecialized,
+    isCapital: u.isCapital ?? false,
     veterancy: u.warshipState?.veterancy ?? 0,
     hasTrainStation: u.hasTrainStation,
     trainType: trainTypeToNum(u.trainType),
@@ -94,6 +97,8 @@ function applyUpdateInPlace(target: UnitState, u: UnitUpdate): void {
   target.troops = u.troops;
   target.missileTimerQueue = u.missileTimerQueue;
   target.level = u.level;
+  target.cityRole = u.cityRole ?? CityRole.Unspecialized;
+  target.isCapital = u.isCapital ?? false;
   target.veterancy = u.warshipState?.veterancy ?? 0;
   target.hasTrainStation = u.hasTrainStation;
   target.trainType = trainTypeToNum(u.trainType);
@@ -289,6 +294,12 @@ export class UnitView {
 
   level(): number {
     return this.state.level;
+  }
+  cityRole(): CityRole {
+    return this.state.cityRole;
+  }
+  isCapital(): boolean {
+    return this.state.isCapital;
   }
   hasTrainStation(): boolean {
     return this.state.hasTrainStation;

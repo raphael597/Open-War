@@ -561,7 +561,17 @@ export function getMessageTypeClasses(type: MessageType): string {
       return severityColors["warn"];
     case MessageType.CHAT:
     case MessageType.ALLIANCE_REQUEST:
+    case MessageType.CAPITAL_ESTABLISHED:
+    case MessageType.WORLD_EVENT:
       return severityColors["info"];
+    case MessageType.CYBER_ATTACK_LAUNCHED:
+    case MessageType.CYBER_ATTACK_BLOCKED:
+      return severityColors["blue"];
+    case MessageType.CYBER_ATTACK_RECEIVED:
+    case MessageType.CYBER_ATTACK_ATTRIBUTED:
+      return severityColors["warn"];
+    case MessageType.CAPITAL_LOST:
+      return severityColors["fail"];
     default:
       console.warn(`Message type ${type} has no explicit color`);
       return severityColors["white"];

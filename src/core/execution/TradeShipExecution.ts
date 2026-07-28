@@ -8,6 +8,7 @@ import {
   UnitType,
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import { CyberOp, WorldEventType } from "../game/Industry";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { findClosestBy } from "../Util";
@@ -173,9 +174,12 @@ export class TradeShipExecution implements Execution {
   private complete() {
     this.active = false;
     this.tradeShip!.delete(false);
-    const gold = this.mg
-      .config()
-      .tradeShipGold(this.tilesTraveled, this.tradeShip!.owner());
+    // A storm closes the sea routes: the run completes but pays nothing.
+    const gold = this.mg.isWorldEventActive(WorldEventType.Storm)
+      ? 0n
+      : this.mg
+          .config()
+          .tradeShipGold(this.tilesTraveled, this.tradeShip!.owner());
 
     if (this.wasCaptured) {
       this.tradeShip!.owner().addGold(gold, this._dstPort.tile());
@@ -194,14 +198,47 @@ export class TradeShipExecution implements Execution {
         .stats()
         .boatCapturedTrade(this.tradeShip!.owner(), this.origOwner, gold);
     } else {
-      this.srcPort.owner().addGold(gold, this.srcPort.tile());
-      this._dstPort.owner().addGold(gold, this._dstPort.tile());
+      this.payTradePartner(this.srcPort.owner(), gold, this.srcPort.tile());
+      this.payTradePartner(this._dstPort.owner(), gold, this._dstPort.tile());
       // Record stats
       this.mg
         .stats()
         .boatArriveTrade(this.srcPort.owner(), this._dstPort.owner(), gold);
     }
     return;
+  }
+
+  /**
+   * Credits a trade payout, unless the partner's books are compromised: while
+   * a TradeHack is running the money lands in the attacker's treasury instead,
+   * and the victim only sees the shortfall.
+   */
+  private payTradePartner(player: Player, gold: bigint, tile: TileRef): void {
+    if (gold > 0n && player.hasCyberEffect(CyberOp.TradeHack)) {
+      const thief = this.tradeHackBeneficiary(player);
+      if (thief !== null) {
+        thief.addGold(gold);
+        return;
+      }
+    }
+    player.addGold(gold, tile);
+  }
+
+  /** The player who ran the active TradeHack against `victim`. */
+  private tradeHackBeneficiary(victim: Player): Player | null {
+    const until = victim.cyberEffectUntil(CyberOp.TradeHack);
+    for (const incident of victim.cyberIncidents()) {
+      if (
+        incident.op === CyberOp.TradeHack &&
+        incident.startedAt +
+          this.mg.config().cyberOpDuration(CyberOp.TradeHack) ===
+          until
+      ) {
+        const attacker = this.mg.playerBySmallID(incident.attacker);
+        return attacker !== undefined && attacker.isPlayer() ? attacker : null;
+      }
+    }
+    return null;
   }
 
   isActive(): boolean {

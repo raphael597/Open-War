@@ -7,6 +7,8 @@ export interface Stats {
   stats(): AllPlayersStats;
 
   numMirvsLaunched(): bigint;
+  /** Every nuke launched by anyone this game — drives the doomsday drag. */
+  numNukesLaunched(): number;
 
   // Player attacks target
   attack(

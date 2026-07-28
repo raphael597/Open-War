@@ -10,6 +10,15 @@ import {
   PlayerUpdate,
   UnitUpdate,
 } from "./GameUpdates";
+import {
+  CityRole,
+  CyberIncident,
+  CyberOp,
+  IndustryUpdate,
+  ResourceType,
+  WorldEvent,
+  WorldEventType,
+} from "./Industry";
 import { MotionPlanRecord } from "./MotionPlans";
 import { RailNetwork } from "./RailNetwork";
 import { Stats } from "./Stats";
@@ -528,6 +537,14 @@ export interface Unit {
   level(): number;
   increaseLevel(): void;
   decreaseLevel(destroyer?: Player): void;
+
+  // Cities
+  /** Specialization of a city. Always Unspecialized for other unit types. */
+  cityRole(): CityRole;
+  setCityRole(role: CityRole): void;
+  /** True while this city is its owner's capital. */
+  isCapital(): boolean;
+  setCapital(isCapital: boolean): void;
 }
 
 export interface TerraNullius {
@@ -586,6 +603,48 @@ export interface Player {
   gold(): Gold;
   addGold(toAdd: Gold, tile?: TileRef): void;
   removeGold(toRemove: Gold): Gold;
+
+  // Deposits, industry and research output
+  /** Number of deposits of this resource on tiles the player controls. */
+  deposits(type: ResourceType): number;
+  /** True when the player controls enough uranium to build this unit. */
+  hasNuclearMaterialFor(type: UnitType): boolean;
+  production(): number;
+  addProduction(amount: number): void;
+  /** Spends up to `amount` production, returning what was actually spent. */
+  spendProduction(amount: number): number;
+  intel(): number;
+  addIntel(amount: number): void;
+  spendIntel(amount: number): boolean;
+  /** Size of the player's largest rail-connected factory cluster. */
+  industrialZone(): number;
+  setIndustrialZone(size: number): void;
+  /** Cities of this role weighted by how well they are supplied. */
+  suppliedCities(role: CityRole): number;
+  setSuppliedCities(weights: ReadonlyMap<CityRole, number>): void;
+
+  // Capital
+  capital(): TileRef | null;
+  setCapital(tile: TileRef | null): void;
+  /** Applies the penalty for losing the capital and clears it. */
+  loseCapital(): void;
+  citiesWithRole(role: CityRole): Unit[];
+
+  // Cyber warfare
+  firewallStrength(): number;
+  hasCyberEffect(op: CyberOp): boolean;
+  cyberEffectUntil(op: CyberOp): Tick;
+  applyCyberEffect(op: CyberOp, attacker: Player): void;
+  cyberIncidents(): readonly CyberIncident[];
+  /** smallID this player's attacks are reported under (false flags aside, their own). */
+  attributedSmallID(): number;
+  cyberReadyAt(): Tick;
+  canLaunchCyberOp(op: CyberOp): boolean;
+  recordCyberOp(): void;
+  /** Incidents whose trace just completed; each returned only once. */
+  takeNewlyAttributedIncidents(): CyberIncident[];
+  pruneCyberState(): void;
+  industryUpdate(): IndustryUpdate;
   troops(): number;
   setTroops(troops: number): void;
   addTroops(troops: number): void;
@@ -775,6 +834,16 @@ export interface Game extends GameMap {
   isPaused(): boolean;
   setPaused(paused: boolean): void;
 
+  /** The resource deposit on this tile, or null. */
+  depositAtTile(tile: TileRef): ResourceType | null;
+
+  // World events
+  /** The event currently running, or null between events. */
+  activeWorldEvent(): WorldEvent | null;
+  setActiveWorldEvent(event: WorldEvent | null): void;
+  /** True while the given event type is in effect. */
+  isWorldEventActive(type: WorldEventType): boolean;
+
   // Units
   unit(id: number): Unit | undefined;
   // See Player.units() for why this is not a rest parameter.
@@ -941,6 +1010,14 @@ export enum MessageType {
   DONATION_RECEIVED,
   CHAT,
   RENEW_ALLIANCE,
+  // Appended (never reordered) — the numeric values are what get archived.
+  WORLD_EVENT,
+  CYBER_ATTACK_RECEIVED,
+  CYBER_ATTACK_BLOCKED,
+  CYBER_ATTACK_ATTRIBUTED,
+  CYBER_ATTACK_LAUNCHED,
+  CAPITAL_LOST,
+  CAPITAL_ESTABLISHED,
 }
 
 // Message categories used for filtering events in the EventsDisplay
@@ -950,6 +1027,8 @@ export enum MessageCategory {
   ALLIANCE = "ALLIANCE",
   TRADE = "TRADE",
   CHAT = "CHAT",
+  CYBER = "CYBER",
+  WORLD = "WORLD",
 }
 
 // Ensures that all message types are included in a category
@@ -973,6 +1052,13 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.ALLIANCE_BROKEN]: MessageCategory.ALLIANCE,
   [MessageType.ALLIANCE_EXPIRED]: MessageCategory.ALLIANCE,
   [MessageType.RENEW_ALLIANCE]: MessageCategory.ALLIANCE,
+  [MessageType.WORLD_EVENT]: MessageCategory.WORLD,
+  [MessageType.CYBER_ATTACK_RECEIVED]: MessageCategory.CYBER,
+  [MessageType.CYBER_ATTACK_BLOCKED]: MessageCategory.CYBER,
+  [MessageType.CYBER_ATTACK_ATTRIBUTED]: MessageCategory.CYBER,
+  [MessageType.CYBER_ATTACK_LAUNCHED]: MessageCategory.CYBER,
+  [MessageType.CAPITAL_LOST]: MessageCategory.ATTACK,
+  [MessageType.CAPITAL_ESTABLISHED]: MessageCategory.ATTACK,
   [MessageType.DONATION_SENT]: MessageCategory.TRADE,
   [MessageType.DONATION_RECEIVED]: MessageCategory.TRADE,
   [MessageType.CHAT]: MessageCategory.CHAT,

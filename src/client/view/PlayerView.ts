@@ -27,6 +27,13 @@ import {
   AttackUpdate,
   PlayerUpdate,
 } from "../../core/game/GameUpdates";
+import {
+  CityRole,
+  CyberIncident,
+  CyberOp,
+  emptyIndustryUpdate,
+  ResourceType,
+} from "../../core/game/Industry";
 import { UserSettings } from "../../core/game/UserSettings";
 import { PlayerState, PlayerStatic, PlayerTypeEnum } from "../render/types";
 import { themeProvider } from "../theme/ThemeProvider";
@@ -99,6 +106,7 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
     // Respect the client-side "Disable emojis" setting: when off, never surface
     // emoji data to any renderer/overlay that reads this shared state (#4430).
     outgoingEmojis: userSettings.emojis() ? pu.outgoingEmojis! : [],
+    industry: pu.industry ?? emptyIndustryUpdate(),
   };
 }
 
@@ -643,5 +651,85 @@ export class PlayerView {
           (this.game.ticks() + 1 - this.lastDeleteUnitTick()),
       ) / 10
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Industry, resources and cyber state (mirrors of the simulation values)
+  // -------------------------------------------------------------------------
+
+  deposits(type: ResourceType): number {
+    switch (type) {
+      case ResourceType.Steel:
+        return this.state.industry.steel;
+      case ResourceType.Oil:
+        return this.state.industry.oil;
+      case ResourceType.Uranium:
+        return this.state.industry.uranium;
+      default:
+        return 0;
+    }
+  }
+
+  production(): number {
+    return this.state.industry.production;
+  }
+
+  intel(): number {
+    return this.state.industry.intel;
+  }
+
+  industrialZone(): number {
+    return this.state.industry.industrialZone;
+  }
+
+  /** Cities of this role weighted by supply, as computed by the simulation. */
+  suppliedCities(role: CityRole): number {
+    return this.state.industry.suppliedCities[role] ?? 0;
+  }
+
+  capital(): TileRef | null {
+    return this.state.industry.capital;
+  }
+
+  cyberEffectUntil(op: CyberOp): number {
+    return this.state.industry.cyberEffects[op] ?? 0;
+  }
+
+  hasCyberEffect(op: CyberOp): boolean {
+    return this.cyberEffectUntil(op) > this.game.ticks();
+  }
+
+  /** Attacks suffered; `attacker` is -1 while the source is still untraced. */
+  cyberIncidents(): readonly CyberIncident[] {
+    return this.state.industry.incidents;
+  }
+
+  /** Seconds until this player may launch another cyber operation. */
+  cyberCooldown(): number {
+    return (
+      Math.max(0, this.state.industry.cyberReadyAt - this.game.ticks()) / 10
+    );
+  }
+
+  canLaunchCyberOp(op: CyberOp): boolean {
+    return (
+      this.game.ticks() >= this.state.industry.cyberReadyAt &&
+      this.intel() >= this.game.config().cyberOpCost(op)
+    );
+  }
+
+  /** Cities of this player specialized for the given role. */
+  citiesWithRole(role: CityRole): UnitView[] {
+    return this.units(UnitType.City).filter(
+      (unit) => unit.cityRole() === role && unit.isActive(),
+    );
+  }
+
+  firewallStrength(): number {
+    let strength = 0;
+    for (const city of this.citiesWithRole(CityRole.Research)) {
+      strength += this.game.config().firewallStrengthPerCity(city.level());
+    }
+    return strength;
   }
 }

@@ -31,6 +31,10 @@ const makePlayer = (
         : true,
     isTraitor: () => opts?.isTraitor ?? false,
     isDisconnected: () => opts?.isDisconnected ?? false,
+    // Industry state the root menu consults when choosing its slots.
+    intel: () => 0,
+    units: () => [],
+    cyberCooldown: () => 0,
   }) as unknown as import("../src/client/view").PlayerView;
 
 const makeParams = (opts?: Partial<MenuElementParams>): MenuElementParams => {
@@ -51,6 +55,8 @@ const makeParams = (opts?: Partial<MenuElementParams>): MenuElementParams => {
     game: {
       inSpawnPhase: () => false,
       owner: () => ({ isPlayer: () => false }),
+      manhattanDist: () => 0,
+      config: () => ({ cyberOpCost: () => 0 }),
     } as any,
     buildMenu: {
       canBuildOrUpgrade: () => false,

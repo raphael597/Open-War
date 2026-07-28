@@ -10,6 +10,7 @@ import {
   UnitType,
 } from "../core/game/Game";
 import { TileRef } from "../core/game/GameMap";
+import { CityRole, CyberOp } from "../core/game/Industry";
 import {
   AllPlayersStats,
   ClientHashMessage,
@@ -138,6 +139,20 @@ export class SendEmbargoAllIntentEvent implements GameEvent {
   constructor(public readonly action: "start" | "stop") {}
 }
 
+export class SendSetCityRoleIntentEvent implements GameEvent {
+  constructor(
+    public readonly unitId: number,
+    public readonly role: CityRole,
+  ) {}
+}
+
+export class SendCyberOpIntentEvent implements GameEvent {
+  constructor(
+    public readonly target: PlayerView,
+    public readonly op: CyberOp,
+  ) {}
+}
+
 export class SendDeleteUnitIntentEvent implements GameEvent {
   constructor(public readonly unitId: number) {}
 }
@@ -252,6 +267,12 @@ export class Transport {
     );
     this.eventBus.on(SendEmbargoAllIntentEvent, (e) =>
       this.onSendEmbargoAllIntent(e),
+    );
+    this.eventBus.on(SendSetCityRoleIntentEvent, (e) =>
+      this.onSendSetCityRoleIntent(e),
+    );
+    this.eventBus.on(SendCyberOpIntentEvent, (e) =>
+      this.onSendCyberOpIntent(e),
     );
     this.eventBus.on(BuildUnitIntentEvent, (e) => this.onBuildUnitIntent(e));
 
@@ -574,6 +595,22 @@ export class Transport {
     this.sendIntent({
       type: "embargo_all",
       action: event.action,
+    });
+  }
+
+  private onSendSetCityRoleIntent(event: SendSetCityRoleIntentEvent) {
+    this.sendIntent({
+      type: "set_city_role",
+      unitId: event.unitId,
+      role: event.role,
+    });
+  }
+
+  private onSendCyberOpIntent(event: SendCyberOpIntentEvent) {
+    this.sendIntent({
+      type: "cyber_op",
+      targetID: event.target.id(),
+      op: event.op,
     });
   }
 

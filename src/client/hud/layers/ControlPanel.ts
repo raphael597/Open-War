@@ -8,6 +8,7 @@ import { Config } from "../../../core/configuration/Config";
 import { GameMode, GameType, Gold } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
+import { ResourceType } from "../../../core/game/Industry";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { Controller } from "../../Controller";
 import { AttackRatioEvent } from "../../InputHandler";
@@ -44,6 +45,19 @@ export class ControlPanel extends LitElement implements Controller {
 
   @state()
   private _isVisible = false;
+
+  @state()
+  private _production = 0;
+  @state()
+  private _intel = 0;
+  @state()
+  private _steel = 0;
+  @state()
+  private _oil = 0;
+  @state()
+  private _uranium = 0;
+  @state()
+  private _industrialZone = 0;
 
   @state()
   private _notification: { type: "warning" | "info"; message: string } | null =
@@ -114,6 +128,12 @@ export class ControlPanel extends LitElement implements Controller {
     const config = this.game.config();
     this._maxTroops = config.maxTroops(player);
     this._gold = player.gold();
+    this._production = player.production();
+    this._intel = player.intel();
+    this._steel = player.deposits(ResourceType.Steel);
+    this._oil = player.deposits(ResourceType.Oil);
+    this._uranium = player.deposits(ResourceType.Uranium);
+    this._industrialZone = player.industrialZone();
     this._troops = player.troops();
     this._attackingTroops = player
       .outgoingAttacks()
@@ -392,6 +412,72 @@ export class ControlPanel extends LitElement implements Controller {
     `;
   }
 
+  /**
+   * Industry readout: production, intel and controlled deposits. Entries are
+   * omitted while they are zero, so a player who never builds a factory never
+   * sees an industry row at all.
+   */
+  private renderIndustryRow() {
+    const entries: {
+      label: string;
+      title: string;
+      value: number;
+      color: string;
+    }[] = [
+      {
+        label: "P",
+        title: translateText("industry.production"),
+        value: this._production,
+        color: "text-amber-300",
+      },
+      {
+        label: "I",
+        title: translateText("industry.intel"),
+        value: this._intel,
+        color: "text-cyan-300",
+      },
+      {
+        label: "Fe",
+        title: translateText("industry.steel"),
+        value: this._steel,
+        color: "text-slate-300",
+      },
+      {
+        label: "Oil",
+        title: translateText("industry.oil"),
+        value: this._oil,
+        color: "text-emerald-300",
+      },
+      {
+        label: "U",
+        title: translateText("industry.uranium"),
+        value: this._uranium,
+        color: "text-lime-300",
+      },
+      {
+        label: "Z",
+        title: translateText("industry.industrial_zone"),
+        value: this._industrialZone,
+        color: "text-orange-300",
+      },
+    ].filter((entry) => entry.value > 0);
+    if (entries.length === 0) return "";
+    return html`
+      <div
+        class="flex items-center gap-2 text-xs font-bold tabular-nums"
+        translate="no"
+      >
+        ${entries.map(
+          (entry) => html`
+            <span class=${entry.color} title=${entry.title}
+              >${entry.label} ${renderNumber(entry.value)}</span
+            >
+          `,
+        )}
+      </div>
+    `;
+  }
+
   private renderDesktopTroopBar() {
     const { greenPercent, orangePercent } = this.calculateTroopBar();
     return html`
@@ -509,6 +595,7 @@ export class ControlPanel extends LitElement implements Controller {
           <span class="tabular-nums">${renderNumber(this._gold)}</span>
         </div>
       </div>
+      ${this.renderIndustryRow()}
       <!-- Row 2: attack ratio | slider -->
       <div class="flex items-center gap-1.5" translate="no">
         <div

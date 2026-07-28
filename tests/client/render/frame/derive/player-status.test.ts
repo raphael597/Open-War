@@ -1,3 +1,7 @@
+import {
+  CityRole,
+  emptyIndustryUpdate,
+} from "../../../../../src/core/game/Industry";
 /**
  * computePlayerStatus has two modes:
  *
@@ -47,6 +51,7 @@ function ps(overrides: Partial<PlayerState> = {}): PlayerState {
     outgoingAllianceRequests: [],
     alliances: [],
     outgoingEmojis: [],
+    industry: emptyIndustryUpdate(),
     ...overrides,
   };
 }
@@ -71,6 +76,8 @@ function unit(overrides: Partial<UnitState> = {}): UnitState {
     troops: 0,
     missileTimerQueue: [],
     level: 1,
+    cityRole: CityRole.Unspecialized,
+    isCapital: false,
     veterancy: 0,
     hasTrainStation: false,
     trainType: null,

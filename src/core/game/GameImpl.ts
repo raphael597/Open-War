@@ -41,6 +41,13 @@ import {
 } from "./Game";
 import { GameMap, TileRef } from "./GameMap";
 import { GameUpdate, GameUpdateType } from "./GameUpdates";
+import {
+  AllResourceTypes,
+  depositAt,
+  ResourceType,
+  WorldEvent,
+  WorldEventType,
+} from "./Industry";
 import { MotionPlanRecord, packMotionPlans } from "./MotionPlans";
 import { PlayerImpl } from "./PlayerImpl";
 import { RailNetwork } from "./RailNetwork";
@@ -447,6 +454,46 @@ export class GameImpl implements Game {
     this.addUpdate({ type: GameUpdateType.GamePaused, paused });
   }
 
+  // ---------------------------------------------------------------------
+  // Resource deposits
+  // ---------------------------------------------------------------------
+
+  /**
+   * Index into AllResourceTypes for the deposit on this tile, or -1 for none.
+   * Called on every ownership change, so it returns an index rather than a
+   * string to keep the hot path free of allocations and map lookups.
+   */
+  depositIndexAt(tile: TileRef): number {
+    if (!this._map.isLand(tile) || this._map.isImpassable(tile)) return -1;
+    const deposit = depositAt(tile);
+    return deposit === null ? -1 : AllResourceTypes.indexOf(deposit);
+  }
+
+  /** The deposit on this tile, or null. */
+  depositAtTile(tile: TileRef): ResourceType | null {
+    const index = this.depositIndexAt(tile);
+    return index < 0 ? null : AllResourceTypes[index];
+  }
+
+  // ---------------------------------------------------------------------
+  // World events
+  // ---------------------------------------------------------------------
+
+  private _activeWorldEvent: WorldEvent | null = null;
+
+  activeWorldEvent(): WorldEvent | null {
+    return this._activeWorldEvent;
+  }
+
+  setActiveWorldEvent(event: WorldEvent | null): void {
+    this._activeWorldEvent = event;
+  }
+
+  isWorldEventActive(type: WorldEventType): boolean {
+    const event = this._activeWorldEvent;
+    return event !== null && event.type === type && event.endTick > this._ticks;
+  }
+
   inSpawnPhase(): boolean {
     return this.startTick === null;
   }
@@ -736,13 +783,22 @@ export class GameImpl implements Game {
       throw Error(`cannot conquer impassable terrain`);
     }
     const previousOwner = this.owner(tile) as TerraNullius | PlayerImpl;
+    const deposit = this.depositIndexAt(tile);
     if (previousOwner.isPlayer()) {
       previousOwner._lastTileChange = this._ticks;
       previousOwner._tiles.delete(tile);
       previousOwner._borderTiles.delete(tile);
+      if (deposit >= 0) {
+        previousOwner._deposits[deposit]--;
+        previousOwner.markIndustryDirty();
+      }
     }
     this._map.setOwnerID(tile, owner.smallID());
     owner._tiles.add(tile);
+    if (deposit >= 0) {
+      owner._deposits[deposit]++;
+      owner.markIndustryDirty();
+    }
     owner._lastTileChange = this._ticks;
     this.updateBorders(tile);
     this._map.setFallout(tile, false);
@@ -761,6 +817,11 @@ export class GameImpl implements Game {
     previousOwner._lastTileChange = this._ticks;
     previousOwner._tiles.delete(tile);
     previousOwner._borderTiles.delete(tile);
+    const deposit = this.depositIndexAt(tile);
+    if (deposit >= 0) {
+      previousOwner._deposits[deposit]--;
+      previousOwner.markIndustryDirty();
+    }
 
     this._map.setOwnerID(tile, 0);
     this.updateBorders(tile);

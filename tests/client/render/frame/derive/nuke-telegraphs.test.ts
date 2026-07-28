@@ -1,3 +1,7 @@
+import {
+  CityRole,
+  emptyIndustryUpdate,
+} from "../../../../../src/core/game/Industry";
 /**
  * extractNukeTelegraphs colors each telegraph by who launched the nuke:
  *
@@ -51,6 +55,7 @@ function ps(overrides: Partial<PlayerState> = {}): PlayerState {
     outgoingAllianceRequests: [],
     alliances: [],
     outgoingEmojis: [],
+    industry: emptyIndustryUpdate(),
     ...overrides,
   };
 }
@@ -75,6 +80,8 @@ function nuke(overrides: Partial<UnitState> = {}): UnitState {
     troops: 0,
     missileTimerQueue: [],
     level: 1,
+    cityRole: CityRole.Unspecialized,
+    isCapital: false,
     veterancy: 0,
     hasTrainStation: false,
     trainType: null,

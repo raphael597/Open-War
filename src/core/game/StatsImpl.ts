@@ -54,9 +54,14 @@ export class StatsImpl implements Stats {
   private readonly data: AllPlayersStats = {};
 
   private _numMirvLaunched: bigint = 0n;
+  private _numNukesLaunched = 0;
 
   numMirvsLaunched(): bigint {
     return this._numMirvLaunched;
+  }
+
+  numNukesLaunched(): number {
+    return this._numNukesLaunched;
   }
 
   getPlayerStats(player: Player): PlayerStats {
@@ -235,6 +240,7 @@ export class StatsImpl implements Stats {
     if (type === UnitType.MIRV) {
       this._numMirvLaunched++;
     }
+    this._numNukesLaunched++;
     this._addBomb(player, type, BOMB_INDEX_LAUNCH, 1);
   }
 

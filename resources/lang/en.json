@@ -190,6 +190,13 @@
       "weak": "[P1] is weak."
     }
   },
+  "city_role": {
+    "garrison": "Garrison",
+    "metropolis": "Metropolis",
+    "research": "Research",
+    "shipyard": "Shipyard",
+    "unspecialized": "Unspecialized"
+  },
   "clan_modal": {
     "applied": "Applied",
     "approve": "Approve",
@@ -426,6 +433,20 @@
     "verified_name": "Verified username",
     "verified_name_info": "Your username is reserved for your account and shows a verified badge in-game."
   },
+  "cyber_op": {
+    "desc": {
+      "blackout": "Takes the target's standings offline",
+      "falseflag": "Blames the target's attacks on a neighbour",
+      "stuxnet": "Jams the target's missile silos",
+      "tradehack": "Diverts the target's trade income to you"
+    },
+    "name": {
+      "blackout": "Blackout",
+      "falseflag": "False Flag",
+      "stuxnet": "Stuxnet",
+      "tradehack": "Trade Hack"
+    }
+  },
   "difficulty": {
     "difficulty": "Nation difficulty",
     "easy": "Easy",
@@ -500,7 +521,29 @@
     "betrayal_debuff_ends": "{time} seconds left until betrayal debuff ends",
     "betrayal_description": "You broke your alliance with {name}, making you a TRAITOR ({malusPercent}% defense debuff for {durationText})",
     "betrayed_you": "{name} broke their alliance with you",
+    "capital_established": "Your capital has been established",
+    "capital_lost": "Your capital has fallen — treasury and troops lost",
     "conquered_no_gold": "Conquered {name} (didn't play, no gold awarded)",
+    "cyber_attributed_blackout": "The Blackout attack was traced back to {name}",
+    "cyber_attributed_falseflag": "The False Flag attack was traced back to {name}",
+    "cyber_attributed_stuxnet": "The Stuxnet attack was traced back to {name}",
+    "cyber_attributed_tradehack": "The Trade Hack attack was traced back to {name}",
+    "cyber_blocked_blackout": "Your Blackout was absorbed by enemy firewalls",
+    "cyber_blocked_falseflag": "Your False Flag was absorbed by enemy firewalls",
+    "cyber_blocked_stuxnet": "Your Stuxnet was absorbed by enemy firewalls",
+    "cyber_blocked_tradehack": "Your Trade Hack was absorbed by enemy firewalls",
+    "cyber_defended_blackout": "Your firewalls absorbed an incoming Blackout",
+    "cyber_defended_falseflag": "Your firewalls absorbed an incoming False Flag",
+    "cyber_defended_stuxnet": "Your firewalls absorbed an incoming Stuxnet",
+    "cyber_defended_tradehack": "Your firewalls absorbed an incoming Trade Hack",
+    "cyber_launched_blackout": "Blackout launched against {name}",
+    "cyber_launched_falseflag": "False Flag launched against {name}",
+    "cyber_launched_stuxnet": "Stuxnet launched against {name}",
+    "cyber_launched_tradehack": "Trade Hack launched against {name}",
+    "cyber_received_blackout": "You are under a Blackout attack from an unknown source",
+    "cyber_received_falseflag": "You are under a False Flag attack from an unknown source",
+    "cyber_received_stuxnet": "You are under a Stuxnet attack from an unknown source",
+    "cyber_received_tradehack": "You are under a Trade Hack attack from an unknown source",
     "duration_second": "1 second",
     "duration_seconds_plural": "{seconds} seconds",
     "focus": "Focus",
@@ -520,6 +563,7 @@
     "sent_gold_to_player": "Sent {gold} gold to {name}",
     "sent_troops_to_player": "Sent {troops} troops to {name}",
     "trade_ship_captured": "Your trade ship was captured by {name}",
+    "train_derailed": "A train was derailed in hostile territory",
     "unit_destroyed": "Your {unit} was destroyed",
     "unit_voluntarily_deleted": "Unit voluntarily deleted",
     "wants_to_renew_alliance": "{name} wants to renew your alliance"
@@ -872,6 +916,14 @@
     "visibility_public": "Public",
     "waiting": "Waiting for players...",
     "water_nukes": "Water nukes"
+  },
+  "industry": {
+    "industrial_zone": "Industrial zone",
+    "intel": "Intel",
+    "oil": "Oil",
+    "production": "Production",
+    "steel": "Steel",
+    "uranium": "Uranium"
   },
   "ios_banner": {
     "got_it": "Got it",
@@ -1363,6 +1415,7 @@
     "waiting_for_players": "Waiting for players"
   },
   "radial_menu": {
+    "cyber": "Cyber",
     "delete_unit_description": "Click to delete the nearest unit",
     "delete_unit_title": "Delete Unit"
   },
@@ -1729,5 +1782,13 @@
     "you_won": "You Won!",
     "your_team": "Your team won!",
     "youtube_tutorial": "Need some help?"
+  },
+  "world_event": {
+    "ended_nukemoratorium": "Nuclear Moratorium has ended",
+    "ended_resourceboom": "Resource Boom has ended",
+    "ended_storm": "Sea Storm has ended",
+    "started_nukemoratorium": "Nuclear Moratorium has begun",
+    "started_resourceboom": "Resource Boom has begun",
+    "started_storm": "Sea Storm has begun"
   }
 }

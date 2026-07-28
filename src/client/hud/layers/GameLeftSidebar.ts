@@ -4,6 +4,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import { assetUrl } from "../../../core/AssetUrls";
 import type { EventBus } from "../../../core/EventBus";
 import { GameMode, type Team } from "../../../core/game/Game";
+import { CyberOp } from "../../../core/game/Industry";
 import type { Controller } from "../../Controller";
 import { Platform } from "../../Platform";
 import { themeProvider } from "../../theme/ThemeProvider";
@@ -30,6 +31,8 @@ export class GameLeftSidebar extends LitElement implements Controller {
   private isTeamStatsShown = false;
   @state()
   private isVisible = false;
+  @state()
+  private isBlackedOut = false;
   @state()
   private isPlayerTeamLabelVisible = false;
   @state()
@@ -74,6 +77,14 @@ export class GameLeftSidebar extends LitElement implements Controller {
   tick() {
     if (this.game === null) return;
 
+    // A blackout takes the standings offline: the player can still fight,
+    // they just cannot see who is winning while it runs.
+    const blackedOut =
+      this.game.myPlayer()?.hasCyberEffect(CyberOp.Blackout) ?? false;
+    if (blackedOut !== this.isBlackedOut) {
+      this.isBlackedOut = blackedOut;
+    }
+
     const team = this.game.myPlayer()?.team();
     if (this.playerTeam === null && team !== null && team !== undefined) {
       this.playerTeam = team;
@@ -113,7 +124,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
     return html`
       <aside
         class=${`fixed top-0 min-[1200px]:top-4 left-0 min-[1200px]:left-4 z-900 flex flex-col max-h-[calc(100vh-80px)] overflow-y-auto p-2 bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg rounded-br-lg ${this.isPlayerStatsShown || this.isTeamStatsShown ? "max-[400px]:w-full max-[400px]:rounded-none" : ""} transition-all duration-300 ease-out transform ${
-          this.isVisible ? "translate-x-0" : "hidden"
+          this.isVisible && !this.isBlackedOut ? "translate-x-0" : "hidden"
         }`}
         style="margin-top: ${this.barOffset}px;"
       >

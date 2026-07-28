@@ -1,6 +1,7 @@
 import {
   Execution,
   Game,
+  MessageType,
   Player,
   TrainType,
   Unit,
@@ -111,6 +112,19 @@ export class TrainExecution implements Execution {
       return;
     }
 
+    // A train is only as safe as the ground it runs on. Rolling onto tiles an
+    // enemy now holds derails it — the freight is lost and the route has to be
+    // re-secured before industry gets its bonus back.
+    if (this.isOnHostileGround()) {
+      this.mg?.displayMessage(
+        "events_display.train_derailed",
+        MessageType.UNIT_DESTROYED,
+        this.player.id(),
+      );
+      this.deleteTrain();
+      return;
+    }
+
     const tile = this.getNextTile();
     if (tile) {
       this.updateCarsPositions(tile);
@@ -118,6 +132,19 @@ export class TrainExecution implements Execution {
       this.targetReached();
       this.deleteTrain();
     }
+  }
+
+  /**
+   * True when the engine sits on a tile owned by someone the player is not
+   * friendly with. Only the engine is checked: the cars follow its path, so
+   * one test per tick is enough and keeps this off the hot path.
+   */
+  private isOnHostileGround(): boolean {
+    if (this.mg === null || this.train === null) return false;
+    const owner = this.mg.owner(this.train.tile());
+    if (!owner.isPlayer()) return false;
+    if (owner === this.player) return false;
+    return !this.player.isFriendly(owner);
   }
 
   loadCargo() {

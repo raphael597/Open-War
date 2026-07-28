@@ -6,6 +6,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { industryUpdateEqual } from "./Industry";
 
 /**
  * Build a partial PlayerUpdate containing only fields whose value differs
@@ -65,7 +66,8 @@ export function diffPlayerUpdate(
     emojiArrayEqual(prev.outgoingEmojis, next.outgoingEmojis) &&
     attackArrayMembershipEqual(prev.outgoingAttacks, next.outgoingAttacks) &&
     attackArrayMembershipEqual(prev.incomingAttacks, next.incomingAttacks) &&
-    allianceArrayEqual(prev.alliances, next.alliances)
+    allianceArrayEqual(prev.alliances, next.alliances) &&
+    industryUpdateEqual(prev.industry, next.industry)
   ) {
     return null;
   }
@@ -145,6 +147,7 @@ export function diffPlayerUpdate(
     "alliances",
     allianceArrayEqual(prev.alliances, next.alliances),
   );
+  setIfDifferent("industry", industryUpdateEqual(prev.industry, next.industry));
 
   return changed ? diff : null;
 }
@@ -197,6 +200,7 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.alliances !== undefined) target.alliances = pu.alliances;
   if (pu.outgoingEmojis !== undefined)
     target.outgoingEmojis = pu.outgoingEmojis;
+  if (pu.industry !== undefined) target.industry = pu.industry;
 }
 
 function numberArrayEqual(a?: number[], b?: number[]): boolean {

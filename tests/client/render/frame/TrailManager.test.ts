@@ -1,3 +1,4 @@
+import { CityRole } from "../../../../src/core/game/Industry";
 /**
  * TrailManager stamps a unit's path into the per-tile "last owner" texture.
  *
@@ -40,6 +41,8 @@ function unit(overrides: Partial<UnitState> = {}): UnitState {
     troops: 0,
     missileTimerQueue: [],
     level: 1,
+    cityRole: CityRole.Unspecialized,
+    isCapital: false,
     veterancy: 0,
     hasTrainStation: false,
     trainType: null,

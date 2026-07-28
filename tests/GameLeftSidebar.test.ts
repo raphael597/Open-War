@@ -46,6 +46,8 @@ describe("GameLeftSidebar", () => {
       isAlive: () => true,
       isOnSameTeam: () => false,
       team: () => null,
+      // The sidebar hides itself while a Blackout is running.
+      hasCyberEffect: () => false,
     } as unknown as PlayerView;
     const game = {
       config: () => ({

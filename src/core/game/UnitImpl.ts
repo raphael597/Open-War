@@ -15,6 +15,7 @@ import {
 import { GameImpl } from "./GameImpl";
 import { TileRef } from "./GameMap";
 import { GameUpdateType, UnitUpdate } from "./GameUpdates";
+import { CityRole } from "./Industry";
 import { PlayerImpl } from "./PlayerImpl";
 import { maxHealthWithVeterancy } from "./Veterancy";
 
@@ -38,6 +39,8 @@ export class UnitImpl implements Unit {
   private _missileTimerQueue: number[] = [];
   private _hasTrainStation: boolean = false;
   private _level: number = 1;
+  private _cityRole: CityRole = CityRole.Unspecialized;
+  private _isCapital = false;
   private _targetable: boolean = true;
   private _loaded: boolean | undefined;
   private _trainType: TrainType | undefined;
@@ -154,6 +157,8 @@ export class UnitImpl implements Unit {
       hasTrainStation: this._hasTrainStation,
       trainType: this._trainType,
       loaded: this._loaded,
+      cityRole: this._cityRole,
+      isCapital: this._isCapital,
     };
   }
 
@@ -533,6 +538,27 @@ export class UnitImpl implements Unit {
 
   level(): number {
     return this._level;
+  }
+
+  cityRole(): CityRole {
+    return this._cityRole;
+  }
+
+  setCityRole(role: CityRole): void {
+    if (this._type !== UnitType.City) {
+      throw new Error(`Cannot specialize a ${this._type}`);
+    }
+    this._cityRole = role;
+    this.touch();
+  }
+
+  isCapital(): boolean {
+    return this._isCapital;
+  }
+
+  setCapital(isCapital: boolean): void {
+    this._isCapital = isCapital;
+    this.touch();
   }
 
   veterancy(): number {

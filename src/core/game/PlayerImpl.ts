@@ -22,7 +22,9 @@ import {
   EmojiMessage,
   GameMode,
   Gold,
+  MessageType,
   MutableAlliance,
+  Nukes,
   Player,
   PlayerBuildable,
   PlayerBuildableUnitType,
@@ -53,6 +55,17 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import {
+  AllCyberOps,
+  AllResourceTypes,
+  CityRole,
+  CyberIncident,
+  CyberOp,
+  IndustryUpdate,
+  ResourceType,
+  uraniumRequiredFor,
+  WorldEventType,
+} from "./Industry";
 import { ReadonlyTileSet, TileSet } from "./TileSet";
 import {
   bestShoreDeploymentSource,
@@ -140,6 +153,39 @@ export class PlayerImpl implements Player {
 
   private _spawnTile: TileRef | undefined;
   private _isDisconnected = false;
+
+  /**
+   * Controlled deposits, indexed by AllResourceTypes order. Maintained
+   * incrementally in GameImpl.conquer/relinquish — recounting the owned tiles
+   * every tick would be far too slow on a large map.
+   */
+  public _deposits: number[] = [0, 0, 0];
+
+  /** Banked factory output, spent against structure costs. */
+  private _production = 0;
+  /** Banked research output, spent on cyber operations. */
+  private _intel = 0;
+  /** Size of the largest rail-connected factory cluster, refreshed per tick. */
+  private _industrialZone = 0;
+  /** Supply-weighted city count per role, refreshed by IndustryExecution. */
+  private _suppliedCities: ReadonlyMap<CityRole, number> = new Map();
+  /** Tile of the capital city, or null while the player has none. */
+  private _capital: TileRef | null = null;
+  /** Expiry tick per active cyber effect. Absent means not affected. */
+  private _cyberEffects = new Map<CyberOp, Tick>();
+  /** Attacks suffered, with the attacker hidden until the reveal tick. */
+  private _cyberIncidents: CyberIncident[] = [];
+  /** Earliest tick this player may launch another cyber operation. */
+  private _cyberReadyAt = 0;
+  /** Whom this player's attacks are blamed on while a false flag runs. */
+  private _falseFlagDecoy: number | null = null;
+  /**
+   * Cached industry snapshot plus its invalidation flag. toFullUpdate runs for
+   * every player every tick and this object is almost always unchanged, so
+   * rebuilding it each time was pure allocation churn.
+   */
+  private _industrySnapshot: IndustryUpdate | null = null;
+  private _industryDirty = true;
 
   /**
    * Last PlayerUpdate emitted for this player on the worker→main channel.
@@ -278,12 +324,15 @@ export class PlayerImpl implements Player {
       }
     }
 
+    // Outgoing attacks report attributedSmallID, not smallID: while a false
+    // flag is running this player's offensives show up under someone else's
+    // banner, which is the whole point of the operation.
     const outgoingAttacks =
       this._outgoingAttacks.length === 0
         ? EMPTY_ATTACK_UPDATES
         : this._outgoingAttacks.map((a) => {
             return {
-              attackerID: a.attacker().smallID(),
+              attackerID: a.attacker().attributedSmallID(),
               targetID: a.target().smallID(),
               troops: a.troops(),
               id: a.id(),
@@ -297,7 +346,7 @@ export class PlayerImpl implements Player {
       if (incoming.length > 0) {
         incomingAttacks = incoming.map((a) => {
           return {
-            attackerID: a.attacker().smallID(),
+            attackerID: a.attacker().attributedSmallID(),
             targetID: a.target().smallID(),
             troops: a.troops(),
             id: a.id(),
@@ -328,6 +377,7 @@ export class PlayerImpl implements Player {
       tilesOwned: this.numTilesOwned(),
       gold: this._gold,
       troops: this.troops(),
+      industry: this.industryUpdate(),
       allies: allies,
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
@@ -1201,6 +1251,20 @@ export class PlayerImpl implements Player {
     if (unit.owner() === this) {
       throw new Error(`Cannot capture unit, ${this} already owns ${unit}`);
     }
+    // Taking someone's capital costs them the decapitation penalty; the
+    // building itself becomes an ordinary city for its new owner.
+    if (unit.isCapital()) {
+      const previousOwner = unit.owner();
+      unit.setCapital(false);
+      if (previousOwner.capital() === unit.tile()) {
+        previousOwner.loseCapital();
+        this.mg.displayMessage(
+          "events_display.capital_lost",
+          MessageType.CAPITAL_LOST,
+          previousOwner.id(),
+        );
+      }
+    }
     unit.setOwner(this);
   }
 
@@ -1226,12 +1290,21 @@ export class PlayerImpl implements Player {
     );
     this._units.push(b);
     this.recordUnitConstructed(type);
-    this.removeGold(cost);
+    this.payWithProductionAndGold(cost);
     this.removeTroops("troops" in params ? (params.troops ?? 0) : 0);
     this.mg.addUpdate(b.toUpdate());
     this.mg.addUnit(b);
 
     return b;
+  }
+
+  /** Pays a build cost from banked production first, then from gold. */
+  private payWithProductionAndGold(cost: Gold): void {
+    const fromProduction = this.productionOffsetFor(cost);
+    if (fromProduction > 0n) {
+      this.spendProduction(Number(fromProduction));
+    }
+    this.removeGold(cost - fromProduction);
   }
 
   public findUnitToUpgrade(type: UnitType, targetTile: TileRef): Unit | false {
@@ -1268,13 +1341,48 @@ export class PlayerImpl implements Player {
       return false;
     }
     const cost = knownCost ?? this.mg.unitInfo(unitType).cost(this.mg, this);
-    if (this._gold < cost) {
+    if (this._gold + this.productionOffsetFor(cost) < cost) {
       return false;
     }
     if (unitType !== UnitType.MIRVWarhead && !this.isAlive()) {
       return false;
     }
+    if (!this.hasNuclearMaterialFor(unitType)) {
+      return false;
+    }
+    if (
+      Nukes.has(unitType) &&
+      this.mg.isWorldEventActive(WorldEventType.NukeMoratorium)
+    ) {
+      return false;
+    }
     return true;
+  }
+
+  /**
+   * Banked production the player may put toward a build of this cost. Only a
+   * share of the price can be covered — industry accelerates an economy, it
+   * does not replace one.
+   */
+  private productionOffsetFor(cost: Gold): Gold {
+    const share = this.mg.config().productionCostShare();
+    const cap = (cost * BigInt(Math.round(share * 100))) / 100n;
+    const available = toInt(this._production);
+    return available < cap ? available : cap;
+  }
+
+  /**
+   * Nuclear weapons need controlled uranium deposits, not just gold: a player
+   * who wants the bomb has to hold the ground it comes from.
+   *
+   * Nations and bots are exempt. They stand in for established states with
+   * their own stockpiles, and gating them would quietly remove the nuclear
+   * deterrent the AI is built around.
+   */
+  hasNuclearMaterialFor(unitType: UnitType): boolean {
+    if (this.type() !== PlayerType.Human) return true;
+    const required = uraniumRequiredFor(unitType);
+    return required === 0 || this.deposits(ResourceType.Uranium) >= required;
   }
 
   private canUpgradeUnitType(unitType: UnitType): boolean {
@@ -1309,7 +1417,7 @@ export class PlayerImpl implements Player {
 
   upgradeUnit(unit: Unit) {
     const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
-    this.removeGold(cost);
+    this.payWithProductionAndGold(cost);
     unit.increaseLevel();
     this.recordUnitConstructed(unit.type());
   }
@@ -1425,6 +1533,11 @@ export class PlayerImpl implements Player {
   nukeSpawn(tile: TileRef, nukeType: UnitType): TileRef | false {
     const mg = this.mg;
     if (mg.isSpawnImmunityActive()) {
+      return false;
+    }
+    // Stuxnet jams the launch computers: the silos are intact, they just
+    // won't fire until the operation expires.
+    if (this.hasCyberEffect(CyberOp.Stuxnet)) {
       return false;
     }
     // Impassable terrain cannot be nuked.
@@ -1696,5 +1809,300 @@ export class PlayerImpl implements Player {
 
   bestTransportShipSpawn(targetTile: TileRef): TileRef | false {
     return bestShoreDeploymentSource(this.mg, this, targetTile) ?? false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Resources and industry
+  // -------------------------------------------------------------------------
+
+  deposits(type: ResourceType): number {
+    return this._deposits[AllResourceTypes.indexOf(type)];
+  }
+
+  production(): number {
+    return this._production;
+  }
+
+  addProduction(amount: number): void {
+    this._production = Math.min(
+      this.mg.config().maxProduction(),
+      this._production + amount,
+    );
+    this._industryDirty = true;
+  }
+
+  /** Spends up to `amount` production, returning what was actually spent. */
+  spendProduction(amount: number): number {
+    const spent = Math.min(this._production, Math.max(0, amount));
+    this._production -= spent;
+    if (spent > 0) this._industryDirty = true;
+    return spent;
+  }
+
+  intel(): number {
+    return this._intel;
+  }
+
+  addIntel(amount: number): void {
+    this._intel = Math.min(this.mg.config().maxIntel(), this._intel + amount);
+    this._industryDirty = true;
+  }
+
+  spendIntel(amount: number): boolean {
+    if (this._intel < amount) return false;
+    this._intel -= amount;
+    this._industryDirty = true;
+    return true;
+  }
+
+  industrialZone(): number {
+    return this._industrialZone;
+  }
+
+  setIndustrialZone(size: number): void {
+    if (size === this._industrialZone) return;
+    this._industrialZone = size;
+    this._industryDirty = true;
+  }
+
+  /**
+   * Cities of this role weighted by supply. Fractional: a city at the far end
+   * of an unconnected conquest counts for less than one.
+   */
+  suppliedCities(role: CityRole): number {
+    return this._suppliedCities.get(role) ?? 0;
+  }
+
+  setSuppliedCities(weights: ReadonlyMap<CityRole, number>): void {
+    this._suppliedCities = weights;
+    this._industryDirty = true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Capital
+  // -------------------------------------------------------------------------
+
+  capital(): TileRef | null {
+    return this._capital;
+  }
+
+  setCapital(tile: TileRef | null): void {
+    if (tile === this._capital) return;
+    this._capital = tile;
+    this._industryDirty = true;
+  }
+
+  /**
+   * Called when the capital city is destroyed or captured. The penalty is
+   * what makes a decapitation strike worth planning: it costs the victim a
+   * chunk of their treasury and standing army on top of the building.
+   */
+  loseCapital(): void {
+    this._capital = null;
+    const config = this.mg.config();
+    const goldPenalty =
+      (this._gold * BigInt(Math.round(config.capitalLossGoldPenalty() * 100))) /
+      100n;
+    this.removeGold(goldPenalty);
+    this.removeTroops(
+      Math.floor(this.troops() * config.capitalLossTroopPenalty()),
+    );
+  }
+
+  /** Cities specialized for the given role. */
+  citiesWithRole(role: CityRole): Unit[] {
+    const result: Unit[] = [];
+    for (const unit of this._units) {
+      if (
+        unit.type() === UnitType.City &&
+        unit.isActive() &&
+        unit.cityRole() === role
+      ) {
+        result.push(unit);
+      }
+    }
+    return result;
+  }
+
+  // -------------------------------------------------------------------------
+  // Cyber warfare
+  // -------------------------------------------------------------------------
+
+  /**
+   * Total defensive strength from research cities. An operation whose intel
+   * cost is at or below this is absorbed without effect.
+   */
+  firewallStrength(): number {
+    let strength = 0;
+    for (const city of this.citiesWithRole(CityRole.Research)) {
+      strength += this.mg.config().firewallStrengthPerCity(city.level());
+    }
+    return strength;
+  }
+
+  hasCyberEffect(op: CyberOp): boolean {
+    const until = this._cyberEffects.get(op);
+    return until !== undefined && until > this.mg.ticks();
+  }
+
+  cyberEffectUntil(op: CyberOp): Tick {
+    return this._cyberEffects.get(op) ?? 0;
+  }
+
+  /** Records an incoming operation. The attacker stays hidden for a while. */
+  applyCyberEffect(op: CyberOp, attacker: Player): void {
+    const config = this.mg.config();
+    const now = this.mg.ticks();
+    this._cyberEffects.set(op, now + config.cyberOpDuration(op));
+    this._industryDirty = true;
+    if (op === CyberOp.FalseFlag) {
+      this._falseFlagDecoy = this.pickFalseFlagDecoy(attacker);
+    }
+    this._cyberIncidents.push({
+      op,
+      attacker: attacker.smallID(),
+      startedAt: now,
+      revealAtTick: now + config.cyberAttributionDelay(),
+    });
+  }
+
+  cyberIncidents(): readonly CyberIncident[] {
+    return this._cyberIncidents;
+  }
+
+  /**
+   * smallID this player's attacks are reported under while a false flag is
+   * running, or their own smallID otherwise.
+   */
+  attributedSmallID(): number {
+    if (
+      this._falseFlagDecoy !== null &&
+      this.hasCyberEffect(CyberOp.FalseFlag)
+    ) {
+      return this._falseFlagDecoy;
+    }
+    return this._smallID;
+  }
+
+  /**
+   * Someone to frame: a neighbour who is neither the victim nor the attacker.
+   * Falls back to the victim's own ID (no misdirection) when there is nobody
+   * plausible to blame.
+   */
+  private pickFalseFlagDecoy(attacker: Player): number {
+    const candidates: Player[] = [];
+    for (const other of this.nearby()) {
+      if (!other.isPlayer()) continue;
+      if (other === this || other === attacker) continue;
+      candidates.push(other);
+    }
+    if (candidates.length === 0) return this._smallID;
+    // Sorted for determinism: nearby() order is not guaranteed stable.
+    candidates.sort((a, b) => a.smallID() - b.smallID());
+    return candidates[
+      this._pseudo_random.nextInt(0, candidates.length)
+    ].smallID();
+  }
+
+  cyberReadyAt(): Tick {
+    return this._cyberReadyAt;
+  }
+
+  canLaunchCyberOp(op: CyberOp): boolean {
+    return (
+      this.mg.ticks() >= this._cyberReadyAt &&
+      this._intel >= this.mg.config().cyberOpCost(op)
+    );
+  }
+
+  recordCyberOp(): void {
+    this._cyberReadyAt = this.mg.ticks() + this.mg.config().cyberOpCooldown();
+    this._industryDirty = true;
+  }
+
+  /** Drops expired effects and incidents that are no longer worth showing. */
+  /**
+   * Incidents whose trace has just completed. Each is returned exactly once,
+   * so the caller can announce the attribution without repeating itself.
+   */
+  takeNewlyAttributedIncidents(): CyberIncident[] {
+    const now = this.mg.ticks();
+    const revealed: CyberIncident[] = [];
+    for (const incident of this._cyberIncidents) {
+      if (incident.revealed !== true && now >= incident.revealAtTick) {
+        incident.revealed = true;
+        revealed.push(incident);
+      }
+    }
+    return revealed;
+  }
+
+  pruneCyberState(): void {
+    const now = this.mg.ticks();
+    for (const op of AllCyberOps) {
+      const until = this._cyberEffects.get(op);
+      if (until !== undefined && until <= now) {
+        this._cyberEffects.delete(op);
+        this._industryDirty = true;
+      }
+    }
+    if (this._cyberIncidents.length > 0) {
+      const cutoff = this.mg.config().cyberAttributionDelay() * 3;
+      const kept = this._cyberIncidents.filter(
+        (incident) => now - incident.startedAt <= cutoff,
+      );
+      if (kept.length !== this._cyberIncidents.length) {
+        this._industryDirty = true;
+      }
+      this._cyberIncidents = kept;
+    }
+  }
+
+  /**
+   * Snapshot for the HUD. Incidents the victim has not traced yet report an
+   * attacker of -1 rather than the real smallID, so the information never
+   * reaches the client early.
+   */
+  /** Called when deposits change; they are mutated directly by GameImpl. */
+  markIndustryDirty(): void {
+    this._industryDirty = true;
+  }
+
+  industryUpdate(): IndustryUpdate {
+    // Cyber state is time-dependent (effects expire, attackers become
+    // traceable), so the cache only holds while there is none of it.
+    const stable =
+      this._cyberEffects.size === 0 && this._cyberIncidents.length === 0;
+    if (!this._industryDirty && stable && this._industrySnapshot !== null) {
+      return this._industrySnapshot;
+    }
+
+    const now = this.mg.ticks();
+    const cyberEffects: Partial<Record<CyberOp, number>> = {};
+    for (const [op, until] of this._cyberEffects) {
+      if (until > now) cyberEffects[op] = until;
+    }
+    this._industryDirty = false;
+    this._industrySnapshot = {
+      steel: this._deposits[0],
+      oil: this._deposits[1],
+      uranium: this._deposits[2],
+      production: this._production,
+      intel: this._intel,
+      capital: this._capital,
+      industrialZone: this._industrialZone,
+      suppliedCities: Object.fromEntries(this._suppliedCities) as Partial<
+        Record<CityRole, number>
+      >,
+      cyberEffects,
+      incidents: this._cyberIncidents.map((incident) => ({
+        op: incident.op,
+        attacker: now >= incident.revealAtTick ? incident.attacker : -1,
+        startedAt: incident.startedAt,
+        revealAtTick: incident.revealAtTick,
+      })),
+      cyberReadyAt: this._cyberReadyAt,
+    };
+    return this._industrySnapshot;
   }
 }

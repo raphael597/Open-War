@@ -9,9 +9,11 @@ import {
   UnitType,
 } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
+import { AllCyberOps, SpecializedCityRoles } from "../../../core/game/Industry";
 import { Emoji, findClosestBy, flattenedEmojiTable } from "../../../core/Util";
 import { UIState } from "../../UIState";
 import { renderNumber, translateText } from "../../Utils";
+import type { UnitView } from "../../view";
 import { GameView, PlayerView } from "../../view";
 import { BuildItemDisplay, BuildMenu, flattenedBuildTable } from "./BuildMenu";
 import { ChatIntegration } from "./ChatIntegration";
@@ -29,6 +31,7 @@ const donateGoldIcon = assetUrl("images/DonateGoldIconWhite.svg");
 const donateTroopIcon = assetUrl("images/DonateTroopIconWhite.svg");
 const emojiIcon = assetUrl("images/EmojiIconWhite.svg");
 const infoIcon = assetUrl("images/InfoIcon.svg");
+const cityIcon = assetUrl("images/CityIconWhite.svg");
 const swordIcon = assetUrl("images/SwordIconWhite.svg");
 const targetIcon = assetUrl("images/TargetIconWhite.svg");
 const traitorIcon = assetUrl("images/TraitorIconWhite.svg");
@@ -649,6 +652,98 @@ export const centerButtonElement: CenterButtonElement = {
   },
 };
 
+/** Radius searched for the city a specialization click applies to. */
+const CITY_SELECTION_RADIUS = 5;
+
+/** The player's nearest finished city to the clicked tile, if any. */
+function nearestOwnCity(params: MenuElementParams): UnitView | null {
+  let best: UnitView | null = null;
+  let bestDist = Infinity;
+  for (const unit of params.myPlayer.units(UnitType.City)) {
+    if (unit.isUnderConstruction() || !unit.isActive()) continue;
+    const dist = params.game.manhattanDist(unit.tile(), params.tile);
+    if (dist <= CITY_SELECTION_RADIUS && dist < bestDist) {
+      best = unit;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/**
+ * Specialization picker for a city. Cities are the only structure with a
+ * meaningful choice attached, so the roles live behind their own submenu
+ * rather than cluttering the build menu with four near-identical entries.
+ */
+export const cityRoleMenuElement: MenuElement = {
+  id: "city_role",
+  name: "city_role",
+  color: COLORS.build,
+  icon: cityIcon,
+  displayed: (params: MenuElementParams) => nearestOwnCity(params) !== null,
+  disabled: (params: MenuElementParams) => nearestOwnCity(params) === null,
+  subMenu: (params: MenuElementParams) => {
+    const city = nearestOwnCity(params);
+    return SpecializedCityRoles.map((role) => ({
+      id: `city_role_${role}`,
+      name: role.toLowerCase(),
+      color: COLORS.build,
+      text: translateText(`city_role.${role.toLowerCase()}`),
+      fontSize: "12px",
+      disabled: () => city === null || city.cityRole() === role,
+      action: (p: MenuElementParams) => {
+        if (city !== null) {
+          p.playerActionHandler.handleSetCityRole(city.id(), role);
+        }
+        p.closeMenu();
+      },
+    }));
+  },
+};
+
+/**
+ * Cyber operations against the selected player. Everything here is paid for
+ * in intel from research cities, shares one cooldown, and can be absorbed by
+ * the target's own research — so the menu shows the price rather than hiding
+ * it behind an icon.
+ */
+export const cyberMenuElement: MenuElement = {
+  id: "cyber",
+  name: "cyber",
+  color: COLORS.embargo,
+  text: translateText("radial_menu.cyber"),
+  fontSize: "12px",
+  displayed: (params: MenuElementParams) =>
+    params.selected !== null && params.selected.id() !== params.myPlayer.id(),
+  disabled: (params: MenuElementParams) =>
+    params.selected === null || params.myPlayer.cyberCooldown() > 0,
+  cooldown: (params: MenuElementParams) => params.myPlayer.cyberCooldown(),
+  subMenu: (params: MenuElementParams) =>
+    AllCyberOps.map((op) => ({
+      id: `cyber_${op}`,
+      name: op.toLowerCase(),
+      color: COLORS.embargo,
+      text: `${translateText(`cyber_op.name.${op.toLowerCase()}`)} (${params.game
+        .config()
+        .cyberOpCost(op)})`,
+      fontSize: "11px",
+      tooltipKeys: [
+        {
+          key: `cyber_op.desc.${op.toLowerCase()}`,
+          className: "text-white",
+        },
+      ],
+      disabled: (p: MenuElementParams) =>
+        p.selected === null || !p.myPlayer.canLaunchCyberOp(op),
+      action: (p: MenuElementParams) => {
+        if (p.selected !== null) {
+          p.playerActionHandler.handleCyberOp(p.selected, op);
+        }
+        p.closeMenu();
+      },
+    })),
+};
+
 export const rootMenuElement: MenuElement = {
   id: "root",
   name: "root",
@@ -680,10 +775,22 @@ export const rootMenuElement: MenuElement = {
     const menuItems: (MenuElement | null)[] = [
       infoMenuElement,
       ...(isOwnTerritory
-        ? [deleteUnitElement, allyRequestElement, buildMenuElement]
+        ? [
+            deleteUnitElement,
+            nearestOwnCity(params) !== null
+              ? cityRoleMenuElement
+              : allyRequestElement,
+            buildMenuElement,
+          ]
         : [
             isAllied && !isDisconnected ? allyBreakElement : boatMenuElement,
-            inExtensionWindow ? allyExtendElement : allyRequestElement,
+            params.selected !== null &&
+            params.selected.id() !== params.myPlayer.id() &&
+            params.myPlayer.intel() > 0
+              ? cyberMenuElement
+              : inExtensionWindow
+                ? allyExtendElement
+                : allyRequestElement,
             showDonateInsteadOfAttack
               ? donateGoldRadialElement
               : attackMenuElement,

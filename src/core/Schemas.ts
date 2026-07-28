@@ -21,6 +21,7 @@ import {
   Trios,
   UnitType,
 } from "./game/Game";
+import { CityRole, CyberOp } from "./game/Industry";
 import { ArchivedPlayerStatsSchema, PlayerStatsSchema } from "./StatsSchemas";
 import { flattenedEmojiTable } from "./Util";
 
@@ -28,6 +29,8 @@ export type GameID = string;
 export type ClientID = string;
 
 export type Intent =
+  | SetCityRoleIntent
+  | CyberOpIntent
   | SpawnIntent
   | AttackIntent
   | CancelAttackIntent
@@ -68,6 +71,8 @@ export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
 export type DonateTroopsIntent = z.infer<typeof DonateTroopIntentSchema>;
 export type EmbargoIntent = z.infer<typeof EmbargoIntentSchema>;
+export type SetCityRoleIntent = z.infer<typeof SetCityRoleIntentSchema>;
+export type CyberOpIntent = z.infer<typeof CyberOpIntentSchema>;
 export type BuildUnitIntent = z.infer<typeof BuildUnitIntentSchema>;
 export type UpgradeStructureIntent = z.infer<
   typeof UpgradeStructureIntentSchema
@@ -497,6 +502,18 @@ export const EmbargoAllIntentSchema = z.object({
   action: z.union([z.literal("start"), z.literal("stop")]),
 });
 
+export const SetCityRoleIntentSchema = z.object({
+  type: z.literal("set_city_role"),
+  unitId: z.number(),
+  role: z.enum(CityRole),
+});
+
+export const CyberOpIntentSchema = z.object({
+  type: z.literal("cyber_op"),
+  targetID: ID,
+  op: z.enum(CyberOp),
+});
+
 export const DonateGoldIntentSchema = z.object({
   type: z.literal("donate_gold"),
   recipient: ID,
@@ -597,6 +614,8 @@ export const IntentSchema = z.discriminatedUnion("type", [
   UpgradeStructureIntentSchema,
   EmbargoIntentSchema,
   EmbargoAllIntentSchema,
+  SetCityRoleIntentSchema,
+  CyberOpIntentSchema,
   MoveWarshipIntentSchema,
   QuickChatIntentSchema,
   AllianceExtensionIntentSchema,

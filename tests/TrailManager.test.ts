@@ -7,6 +7,7 @@ import {
   UT_ATOM_BOMB,
   UT_TRANSPORT,
 } from "../src/client/render/types/UnitType";
+import { CityRole } from "../src/core/game/Industry";
 
 const W = 64;
 const H = 64;
@@ -39,6 +40,8 @@ function makeUnit(
     troops: 0,
     missileTimerQueue: [],
     level: 1,
+    cityRole: CityRole.Unspecialized,
+    isCapital: false,
     veterancy: 0,
     hasTrainStation: false,
     trainType: null,

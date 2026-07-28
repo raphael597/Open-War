@@ -1,16 +1,19 @@
 import { EventBus } from "../../../core/EventBus";
 import { TileRef } from "../../../core/game/GameMap";
+import { CityRole, CyberOp } from "../../../core/game/Industry";
 import {
   SendAllianceExtensionIntentEvent,
   SendAllianceRequestIntentEvent,
   SendAttackIntentEvent,
   SendBoatAttackIntentEvent,
   SendBreakAllianceIntentEvent,
+  SendCyberOpIntentEvent,
   SendDeleteUnitIntentEvent,
   SendDonateGoldIntentEvent,
   SendDonateTroopsIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
+  SendSetCityRoleIntentEvent,
   SendSpawnIntentEvent,
   SendTargetPlayerIntentEvent,
 } from "../../Transport";
@@ -92,5 +95,13 @@ export class PlayerActionHandler {
 
   handleDeleteUnit(unitId: number) {
     this.eventBus.emit(new SendDeleteUnitIntentEvent(unitId));
+  }
+
+  handleSetCityRole(unitId: number, role: CityRole) {
+    this.eventBus.emit(new SendSetCityRoleIntentEvent(unitId, role));
+  }
+
+  handleCyberOp(target: PlayerView, op: CyberOp) {
+    this.eventBus.emit(new SendCyberOpIntentEvent(target, op));
   }
 }

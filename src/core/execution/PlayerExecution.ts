@@ -9,12 +9,19 @@ import {
   UnitType,
 } from "../game/Game";
 import { GameMap, TileRef } from "../game/GameMap";
+import { WorldEventType } from "../game/Industry";
 import {
   bumpTraversalGeneration,
   tileTraversalScratch,
   TileTraversalScratch,
 } from "../game/TileTraversalScratch";
-import { calculateBoundingBox, getMode, inscribed, simpleHash } from "../Util";
+import {
+  calculateBoundingBox,
+  getMode,
+  inscribed,
+  simpleHash,
+  toInt,
+} from "../Util";
 
 export class PlayerExecution implements Execution {
   private readonly ticksPerClusterCalc = 20;
@@ -85,7 +92,21 @@ export class PlayerExecution implements Execution {
 
     const troopInc = this.config.troopIncreaseRate(this.player);
     this.player.addTroops(troopInc);
-    const goldFromWorkers = this.config.goldAdditionRate(this.player);
+    // A resource boom makes every controlled deposit yield double.
+    const depositMultiplier = this.mg.isWorldEventActive(
+      WorldEventType.ResourceBoom,
+    )
+      ? this.config.resourceBoomMultiplier()
+      : 1;
+    // Every nuke fired drags the whole world's economy down a little, so the
+    // decision to escalate is one everyone pays for — not just the target.
+    const doomsdayDrag = this.config.doomsdayEconomyMultiplier(
+      this.mg.stats().numNukesLaunched(),
+    );
+    const goldFromWorkers = toInt(
+      Number(this.config.goldAdditionRate(this.player, depositMultiplier)) *
+        doomsdayDrag,
+    );
     this.player.addGold(goldFromWorkers);
 
     // Record stats

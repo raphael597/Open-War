@@ -18,6 +18,7 @@ import {
   UnitType,
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import { CityRole, CyberOp, ResourceType } from "../game/Industry";
 import { UserSettings } from "../game/UserSettings";
 import { GameConfig, TeamCountConfig } from "../Schemas";
 import { NukeType } from "../StatsSchemas";
@@ -112,6 +113,13 @@ const DOOMSDAY_CLOCK_DEFAULTS = {
   warshipDrainMaxPercent: 50,
   warshipDrainCurveExponent: 8, // >1 = convex: stays gentle early, then spikes
 };
+
+/** Units a shipyard city discounts. */
+const NAVAL_UNIT_TYPES = new Set<UnitType>([
+  UnitType.Warship,
+  UnitType.Port,
+  UnitType.TransportShip,
+]);
 
 export class Config {
   private unitInfoCache = new Map<UnitType, UnitInfo>();
@@ -539,8 +547,28 @@ export class Config {
           Math.min(player.unitsOwned(type), player.unitsConstructed(type)),
         0,
       );
-      return BigInt(costFn(numUnits));
+      return this.applyIndustryDiscounts(costFn(numUnits), player, types[0]);
     };
+  }
+
+  /**
+   * Steel deposits make everything cheaper to build; shipyards discount naval
+   * units on top of that. Both are shares of the base price, applied together
+   * and floored at a tenth of the original so nothing ever becomes free.
+   */
+  private applyIndustryDiscounts(
+    baseCost: number,
+    player: Player,
+    type: UnitType,
+  ): bigint {
+    let discount = this.steelCostReduction(player.deposits(ResourceType.Steel));
+    if (NAVAL_UNIT_TYPES.has(type)) {
+      discount += this.shipyardNavalDiscount(
+        player.suppliedCities(CityRole.Shipyard),
+      );
+    }
+    const multiplier = Math.max(0.1, 1 - discount);
+    return BigInt(Math.floor(baseCost * multiplier));
   }
 
   defaultDonationAmount(sender: Player): number {
@@ -817,13 +845,14 @@ export class Config {
     const maxTroops =
       player.type() === PlayerType.Human && this.hasInfiniteTroopsFor(player)
         ? 1_000_000_000
-        : 2 * (Math.pow(player.numTilesOwned(), 0.6) * 1000 + 50000) +
-          player
-            .units(UnitType.City)
-            .filter((u) => !u.isUnderConstruction())
-            .map((city) => city.level())
-            .reduce((a, b) => a + b, 0) *
-            this.cityTroopIncrease();
+        : (2 * (Math.pow(player.numTilesOwned(), 0.6) * 1000 + 50000) +
+            player
+              .units(UnitType.City)
+              .filter((u) => !u.isUnderConstruction())
+              .map((city) => city.level())
+              .reduce((a, b) => a + b, 0) *
+              this.cityTroopIncrease()) *
+          this.garrisonMultiplierFor(player);
 
     if (player.type() === PlayerType.Bot) {
       return maxTroops / 3;
@@ -881,8 +910,18 @@ export class Config {
     return Math.min(player.troops() + toAdd, max) - player.troops();
   }
 
-  goldAdditionRate(player: Player | PlayerView): Gold {
-    const multiplier = this.goldMultiplierFor(player);
+  /**
+   * @param depositMultiplier yield factor on the player's deposits, raised
+   *   while a resource boom is running (callers that hold a Game pass it in;
+   *   the HUD's preview leaves it at 1).
+   */
+  goldAdditionRate(
+    player: Player | PlayerView,
+    depositMultiplier: number = 1,
+  ): Gold {
+    const multiplier =
+      this.goldMultiplierFor(player) *
+      this.economyMultiplierFor(player, depositMultiplier);
     let baseRate: bigint;
     if (player.type() === PlayerType.Bot) {
       baseRate = 50n;
@@ -890,6 +929,42 @@ export class Config {
       baseRate = 100n;
     }
     return BigInt(Math.floor(Number(baseRate) * multiplier));
+  }
+
+  /**
+   * Everything the player's economy has earned on top of the base rate: oil
+   * deposits, metropolis cities, and the drag every launched nuke puts on the
+   * world economy. Read from both the simulation and the HUD, so it takes the
+   * Player/PlayerView union.
+   */
+  /** Standing-army bonus from garrison cities, capped. */
+  garrisonMultiplierFor(player: Player | PlayerView): number {
+    const garrisons = player.suppliedCities(CityRole.Garrison);
+    if (garrisons === 0) return 1;
+    return (
+      1 +
+      Math.min(
+        this.garrisonTroopBonusCap(),
+        garrisons * this.garrisonTroopBonus(),
+      )
+    );
+  }
+
+  economyMultiplierFor(
+    player: Player | PlayerView,
+    depositMultiplier: number = 1,
+  ): number {
+    let multiplier = this.oilGoldMultiplier(
+      player.deposits(ResourceType.Oil) * depositMultiplier,
+    );
+    const metropolises = player.suppliedCities(CityRole.Metropolis);
+    if (metropolises > 0) {
+      multiplier *=
+        1 +
+        (this.cityRoleGoldMultiplier(CityRole.Metropolis) - 1) *
+          Math.min(4, metropolises);
+    }
+    return multiplier;
   }
 
   nukeMagnitudes(unitType: UnitType): NukeMagnitude {
@@ -1050,5 +1125,179 @@ export class Config {
 
   allianceExtensionPromptOffset(): number {
     return 300; // 30 seconds before expiration
+  }
+
+  // -------------------------------------------------------------------------
+  // Resources, industry, cities and cyber warfare
+  //
+  // Balancing for the systems layered on top of the base game. All of it is
+  // deterministic and read from both the sim (Player) and the HUD
+  // (PlayerView), so nothing here may depend on wall-clock time.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Structure discount from controlled steel deposits. Caps so a player who
+   * owns half the map's steel still pays for what they build.
+   */
+  steelCostReduction(steelDeposits: number): number {
+    return Math.min(0.35, steelDeposits * 0.02);
+  }
+
+  /** Gold-rate bonus from controlled oil deposits. */
+  oilGoldMultiplier(oilDeposits: number): number {
+    return 1 + Math.min(0.5, oilDeposits * 0.03);
+  }
+
+  /** Production a single factory contributes per tick, before zone bonus. */
+  factoryProductionPerTick(level: number): number {
+    return 25 * level;
+  }
+
+  /**
+   * Multiplier applied to a factory's output for being wired into a rail
+   * cluster. A lone factory gets nothing; a six-factory zone gets +75%.
+   */
+  industrialZoneMultiplier(zoneSize: number): number {
+    return 1 + Math.min(0.75, Math.max(0, zoneSize - 1) * 0.15);
+  }
+
+  /** Production stock ceiling, so it has to be spent rather than hoarded. */
+  maxProduction(): number {
+    return 2_000_000;
+  }
+
+  /**
+   * Share of a structure's gold cost that banked production may cover.
+   * Production is consumed 1:1 against gold when a build is paid for.
+   */
+  productionCostShare(): number {
+    return 0.5;
+  }
+
+  /** Gold-rate multiplier for a city, by specialization. */
+  cityRoleGoldMultiplier(role: CityRole): number {
+    return role === CityRole.Metropolis ? 1.6 : 1;
+  }
+
+  /** Extra max-troop share each garrison city grants, capped in the caller. */
+  garrisonTroopBonus(): number {
+    return 0.08;
+  }
+
+  garrisonTroopBonusCap(): number {
+    return 0.4;
+  }
+
+  /** Cost discount on naval units per shipyard, capped. */
+  shipyardNavalDiscount(shipyards: number): number {
+    return Math.min(0.5, shipyards * 0.12);
+  }
+
+  /** Intel a research city produces per tick, scaled by its level. */
+  researchIntelPerTick(level: number): number {
+    return 2 * level;
+  }
+
+  maxIntel(): number {
+    return 5_000;
+  }
+
+  /**
+   * Output share a city keeps based on how far it is from the capital.
+   * A city on the rail network is always fully supplied; otherwise output
+   * falls off with distance and floors out rather than going to zero.
+   */
+  supplyFactor(distanceToCapital: number, railConnected: boolean): number {
+    if (railConnected) return 1;
+    return Math.max(0.4, 1 - distanceToCapital / 1500);
+  }
+
+  /** Share of gold lost when the capital falls. */
+  capitalLossGoldPenalty(): number {
+    return 0.25;
+  }
+
+  /** Share of troops lost when the capital falls. */
+  capitalLossTroopPenalty(): number {
+    return 0.15;
+  }
+
+  /** Intel price of a cyber operation. */
+  cyberOpCost(op: CyberOp): number {
+    switch (op) {
+      case CyberOp.Blackout:
+        return 100;
+      case CyberOp.TradeHack:
+        return 200;
+      case CyberOp.Stuxnet:
+        return 250;
+      case CyberOp.FalseFlag:
+        return 300;
+      default:
+        assertNever(op);
+    }
+  }
+
+  /** How long a cyber operation's effect lasts, in ticks. */
+  cyberOpDuration(op: CyberOp): Tick {
+    switch (op) {
+      case CyberOp.Blackout:
+        return 20 * 10;
+      case CyberOp.Stuxnet:
+        return 45 * 10;
+      case CyberOp.TradeHack:
+        return 60 * 10;
+      case CyberOp.FalseFlag:
+        return 30 * 10;
+      default:
+        assertNever(op);
+    }
+  }
+
+  /** Cooldown between cyber operations launched by the same player. */
+  cyberOpCooldown(): Tick {
+    return 45 * 10;
+  }
+
+  /**
+   * Defensive cyber strength from one research city at the given level. An
+   * operation is blocked when the target's total strength meets or exceeds
+   * the operation's intel cost — stacking research buys real immunity, and
+   * the attacker's answer is a more expensive operation.
+   */
+  firewallStrengthPerCity(level: number): number {
+    // One level-1 research city absorbs a Blackout (100), two stop a Trade
+    // Hack (200), three stop a False Flag (300) — a legible ladder rather
+    // than an opaque threshold.
+    return 100 * level;
+  }
+
+  /** Ticks before a cyber victim can trace the attack back to its source. */
+  cyberAttributionDelay(): Tick {
+    return 30 * 10;
+  }
+
+  /** Ticks between world events. */
+  worldEventInterval(): Tick {
+    return 120 * 10;
+  }
+
+  /** How long a world event stays active. */
+  worldEventDuration(): Tick {
+    return 60 * 10;
+  }
+
+  /** Yield multiplier for deposits while a resource boom is running. */
+  resourceBoomMultiplier(): number {
+    return 2;
+  }
+
+  /**
+   * Global gold-rate multiplier as the nuclear exchange escalates. Every
+   * launched nuke makes the whole world a little poorer, so nukes become a
+   * collective decision rather than a purely individual one.
+   */
+  doomsdayEconomyMultiplier(nukesLaunched: number): number {
+    return Math.max(0.5, 1 - nukesLaunched * 0.01);
   }
 }

@@ -1,4 +1,5 @@
 import type { TileRef } from "../../../core/game/GameMap";
+import type { CityRole, IndustryUpdate } from "../../../core/game/Industry";
 
 /** TrainType enum — numeric values matching UnitState.trainType. */
 export enum TrainType {
@@ -83,6 +84,8 @@ export interface PlayerState {
   outgoingAllianceRequests: string[];
   alliances: AllianceData[];
   outgoingEmojis: EmojiData[];
+  /** Resource, industry and cyber state — see core/game/Industry.ts. */
+  industry: IndustryUpdate;
 }
 
 export interface UnitState {
@@ -104,6 +107,10 @@ export interface UnitState {
   troops: number;
   missileTimerQueue: number[];
   level: number;
+  /** City specialization; Unspecialized for every other unit type. */
+  cityRole: CityRole;
+  /** True while this city is its owner's capital. */
+  isCapital: boolean;
   veterancy: number;
   hasTrainStation: boolean;
   trainType: number | null; // 0=Engine, 1=TailEngine, 2=Carriage

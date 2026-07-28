@@ -11,6 +11,29 @@ Das Projekt ist ein Fork von [OpenFront.io](https://github.com/openfrontio/OpenF
 hervorgegangen ist. Der komplette Spielcode ist übernommen, damit hier eigene
 Ideen darauf aufgebaut werden können.
 
+## Eigene Systeme
+
+Über das Grundspiel hinaus gibt es hier eine Wirtschafts-, Städte- und
+Cyber-Ebene. Ausführlich beschrieben in [docs/Systems.md](docs/Systems.md):
+
+- **Rohstoffe.** Stahl, Öl und Uran liegen auf der Karte. Stahl verbilligt
+  Gebäude, Öl bringt Gold, und **Atomwaffen brauchen kontrolliertes Uran** —
+  Nukes sind damit eine Frage der Landkontrolle, nicht nur des Kontostands.
+- **Industrie.** Fabriken erzeugen Produktion, die automatisch bis zur Hälfte
+  der Baukosten deckt. Per Schiene verbundene Fabriken bilden ein
+  Industriegebiet mit bis zu +75 % Ausstoß.
+- **Städte.** Vier Spezialisierungen (Metropole, Garnison, Werft, Forschung)
+  über das Radialmenü. Die erste Stadt wird zur **Hauptstadt** — ihr Verlust
+  kostet ein Viertel der Kasse und 15 % der Truppen. Städte ohne Anbindung an
+  die Hauptstadt liefern weniger.
+- **Cyber-Krieg.** Blackout, Stuxnet, Handels-Hack und False Flag, bezahlt mit
+  Intel aus Forschungsstädten. Forschungsstädte fangen fremde Operationen ab,
+  und das Opfer kann den Angreifer erst nach 30 Sekunden zurückverfolgen.
+- **Weltereignisse und Eskalation.** Rohstoffboom, Seesturm und Nuklear-
+  Moratorium im Wechsel; jede abgefeuerte Atomwaffe drückt zusätzlich die
+  Weltwirtschaft.
+- **Züge** entgleisen in feindlichem Gebiet — Logistik ist ein Angriffsziel.
+
 ## Was gegenüber dem Original anders ist
 
 - **Proprietäre Assets entfernt.** Upstream liefert Logo, Favicon, Titel-Font

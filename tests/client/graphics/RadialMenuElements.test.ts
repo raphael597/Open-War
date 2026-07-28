@@ -94,6 +94,10 @@ describe("RadialMenuElements", () => {
       isPlayer: vi.fn(() => true),
       isTraitor: vi.fn(() => false),
       isDisconnected: vi.fn(() => false),
+      // Industry state the root menu consults when picking its slots.
+      intel: vi.fn(() => 0),
+      units: vi.fn(() => []),
+      cyberCooldown: vi.fn(() => 0),
     } as unknown as PlayerView;
 
     mockGame = {
@@ -107,7 +111,9 @@ describe("RadialMenuElements", () => {
           }),
         }),
         isUnitDisabled: vi.fn(() => false),
+        cyberOpCost: vi.fn(() => 0),
       })),
+      manhattanDist: vi.fn(() => 0),
     } as unknown as GameView;
 
     mockBuildMenu = {

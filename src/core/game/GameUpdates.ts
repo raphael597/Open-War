@@ -15,6 +15,7 @@ import {
   WarshipState,
 } from "./Game";
 import { TileRef } from "./GameMap";
+import { CityRole, IndustryUpdate } from "./Industry";
 
 export interface GameUpdateViewData {
   tick: number;
@@ -192,6 +193,8 @@ export interface UnitUpdate {
   hasTrainStation: boolean;
   trainType?: TrainType; // Only for trains
   loaded?: boolean; // Only for trains
+  cityRole?: CityRole; // Only for cities
+  isCapital?: boolean; // Only for cities
 }
 
 export interface AttackUpdate {
@@ -248,6 +251,7 @@ export interface PlayerUpdate {
   betrayals?: number;
   lastDeleteUnitTick?: Tick;
   isLobbyCreator?: boolean;
+  industry?: IndustryUpdate;
 }
 
 export interface AllianceView {

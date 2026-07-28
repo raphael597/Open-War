@@ -10,6 +10,11 @@ display font is Overpass, and `BACKGROUND_MUSIC_TRACKS` in
 `src/client/sound/SoundManager.ts` is intentionally empty. Do not re-add
 anything from upstream's `proprietary/` directory.
 
+This fork also adds resource, industry, city-specialization and cyber-warfare
+systems on top of the base game — see `docs/Systems.md`. Their shared types
+live in `src/core/game/Industry.ts` and every balancing number is in
+`src/core/configuration/Config.ts`.
+
 ## Commands
 
 ```bash
