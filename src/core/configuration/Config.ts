@@ -22,7 +22,7 @@ import { CityRole, CyberOp, ResourceType } from "../game/Industry";
 import { UserSettings } from "../game/UserSettings";
 import { GameConfig, TeamCountConfig } from "../Schemas";
 import { NukeType } from "../StatsSchemas";
-import { assertNever, sigmoid, toInt, within } from "../Util";
+import { assertNever, minInt, sigmoid, toInt, within } from "../Util";
 
 declare global {
   interface Window {
@@ -272,6 +272,51 @@ export class Config {
     return this.startingGoldFor(playerInfo);
   }
 
+  // Gold storage (Ideenliste 9). Saving up for one decisive MIRV is a wait,
+  // not a decision; a ceiling on the treasury turns hoarding into an active
+  // cost and pushes gold back into the economy. The ceiling grows with the
+  // empire so it throttles hoarding rather than building — and it is itself a
+  // named number rather than an open-ended formula, per docs/Kostenmodell.md.
+  goldStorageBase(): Gold {
+    return 10_000_000n;
+  }
+  goldStoragePerCity(): Gold {
+    return 5_000_000n;
+  }
+  /**
+   * Lower bound on the treasury ceiling: the dearest single purchase in the
+   * game. A ceiling under the MIRV price would not make MIRVs expensive, it
+   * would make them unbuildable — a silent removal disguised as an economy
+   * rule. The brake is meant to bite on stockpiling past the biggest
+   * purchase, not on affording it once.
+   *
+   * Also the fast path for the clamp: below this value no ceiling can apply,
+   * so the per-player unit scan in maxGold() can be skipped entirely.
+   */
+  goldStorageFloor(): Gold {
+    return this.mirvMaxCost();
+  }
+  maxGold(player: Player): Gold {
+    const scaled =
+      this.goldStorageBase() +
+      BigInt(player.unitsOwned(UnitType.City)) * this.goldStoragePerCity();
+    const floor = this.goldStorageFloor();
+    return scaled > floor ? scaled : floor;
+  }
+  /** Whether the treasury ceiling applies at all. */
+  goldStorageEnabled(player: Player): boolean {
+    return !this.hasInfiniteGoldFor(player);
+  }
+
+  /**
+   * Ceiling on the MIRV price (docs/Kostenmodell.md). At the 15M step this is
+   * reached after five launches game-wide; beyond that the global counter has
+   * made its point and further growth only makes the price unreadable.
+   */
+  mirvMaxCost(): Gold {
+    return 100_000_000n;
+  }
+
   trainSpawnRate(numPlayerFactories: number): number {
     // hyperbolic decay, midpoint at 10 factories
     // expected number of trains = numPlayerFactories  / trainSpawnRate(numPlayerFactories)
@@ -400,7 +445,16 @@ export class Config {
             ) {
               return 0n;
             }
-            return 25_000_000n + game.stats().numMirvsLaunched() * 15_000_000n;
+            // Capped, per docs/Kostenmodell.md: this was the only price in the
+            // game that grew without bound, and the only one driven by a
+            // global counter — so a player's MIRV price could be pushed out of
+            // reach by launches they had no part in. The global counter is
+            // kept (it is what makes mass use self-limiting); only the
+            // open-ended growth is removed.
+            return minInt(
+              this.mirvMaxCost(),
+              25_000_000n + game.stats().numMirvsLaunched() * 15_000_000n,
+            );
           },
         };
         break;

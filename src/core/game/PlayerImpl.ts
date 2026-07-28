@@ -1207,6 +1207,22 @@ export class PlayerImpl implements Player {
 
   addGold(toAdd: Gold, tile?: TileRef): void {
     this._gold += toAdd;
+    // Treasury ceiling (Ideenliste 9): the overflow is lost rather than
+    // banked, so gold has to be spent instead of saved for one decisive
+    // strike. Clamped here because addGold is the single funnel for every
+    // income source — workers, trade ships, trains and conquest alike.
+    // The floor check is O(1) and almost always false, which keeps the
+    // per-player unit scan inside maxGold() off the per-tick income path.
+    const config = this.mg.config();
+    if (
+      this._gold > config.goldStorageFloor() &&
+      config.goldStorageEnabled(this)
+    ) {
+      const max = config.maxGold(this);
+      if (this._gold > max) {
+        this._gold = max;
+      }
+    }
     if (tile) {
       this.mg.addUpdate({
         type: GameUpdateType.BonusEvent,
