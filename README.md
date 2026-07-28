@@ -99,9 +99,12 @@ Für eigene Änderungen sind meistens `src/core/configuration/` (Balancing) und
   `BACKGROUND_MUSIC_TRACKS` (`src/client/sound/SoundManager.ts`) eintragen.
   Lautstärkeregler und Track-Rotation funktionieren bereits.
 - **Logo/Favicon:** Dateien in `resources/images/` ersetzen.
-- **Nicht-freie eigene Assets:** ein optionales Verzeichnis `proprietary/`
-  wird beim Build über `resources/` gelegt (gleiche Pfade, `resources/` hat
-  Vorrang). Es ist nicht im Repo und wird nur benutzt, wenn es existiert.
+- **Nicht-freie eigene Assets:** das Verzeichnis `proprietary/` wird beim Build
+  über `resources/` gelegt (gleiche Pfade, `resources/` hat Vorrang). Es ist
+  absichtlich leer und enthält nur eine `.gitkeep` — der `Dockerfile` kopiert
+  es mit `COPY proprietary ./proprietary`, und Docker bricht ab, wenn der Pfad
+  im Build-Kontext fehlt. Die Datei also nicht löschen, sonst scheitert der
+  Image-Build. Eigene Dateien einfach hineinlegen.
 
 ## Spiel lokal testen
 
