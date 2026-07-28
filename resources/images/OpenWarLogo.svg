@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1364 259" width="1364" height="259" role="img" aria-label="Open War">
+  <title>Open War</title>
+  <defs>
+    <linearGradient id="warGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fa9f5"/>
+      <stop offset="1" stop-color="#0084d1"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-width="28" stroke-linecap="square" stroke-linejoin="miter">
+    <!-- OPEN -->
+    <g stroke="#ffffff">
+      <rect x="91" y="59" width="112" height="142" rx="28"/>
+      <path d="M261 59 V201"/>
+      <path d="M261 59 H345 A36 36 0 0 1 345 131 H261"/>
+      <path d="M431 59 H543 M431 130 H525 M431 201 H543"/>
+      <path d="M601 201 V59 L713 201 V59"/>
+    </g>
+    <!-- WAR -->
+    <g stroke="url(#warGradient)">
+      <path d="M821 59 L849 201 L877 105 L905 201 L933 59"/>
+      <path d="M991 201 L1047 59 L1103 201 M1013 155 H1081"/>
+      <path d="M1161 59 V201"/>
+      <path d="M1161 59 H1245 A36 36 0 0 1 1245 131 H1161"/>
+      <path d="M1195 131 L1273 201"/>
+    </g>
+  </g>
+</svg>
