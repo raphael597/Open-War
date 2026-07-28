@@ -17,6 +17,7 @@
     "test:matchmaking:e2e": "node tests/matchmaking/e2e.mjs",
     "perf": "npx tsx tests/perf/run-all.ts",
     "perf:game": "npx tsx tests/perf/fullgame/FullGamePerf.ts",
+    "balance": "npx tsx tests/balance/BalanceArena.ts",
     "perf:client": "npx tsx tests/perf/client/ClientUpdatePerf.ts",
     "perf:client-mem": "npx tsx tests/perf/client/ClientMemoryPerf.ts",
     "perf:client-tick": "npx tsx tests/perf/client/ClientTickPerf.ts",
