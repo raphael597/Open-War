@@ -11,16 +11,76 @@ Der Stern (★) markiert Punkte mit dem besten Verhältnis von Wirkung zu Aufwan
 
 ## 1. Wirtschaft und Bau
 
-Das Kernproblem: Alle Baukosten laufen gegen eine Decke
-(`Math.min(1_000_000, …)` in `Config.ts:439ff`). Ab dem vierten Gebäude kostet
-jedes weitere gleich viel — im Mid-Game verschwindet die Frage „was baue ich"
-und wird zu „in welcher Reihenfolge baue ich alles".
+Das Kernproblem ist nicht, dass sich zu viel lohnt, sondern dass sich zu wenig
+**anfühlt** wie eine Entscheidung.
 
-1. **★ Unterhaltskosten für Gebäude** (B) — Strukturen kosten laufend Gold statt
-   nur einmalig. Macht Bauen zu einer dauerhaften Entscheidung, bremst Snowball
-   und macht Zerstörung feindlicher Infrastruktur endlich wertvoll.
-2. **★ Kostendeckel entfernen** (A) — echte exponentielle Skalierung statt
-   `Math.min`. Der kleinste Eingriff mit spürbarer Wirkung.
+Die Erträge sinken bereits von selbst: `trainSpawnRate(n) = (n + 10) * 15` ist
+hyperbolisch mit Mittelpunkt bei 10 Fabriken, `trainGold()` zieht ab der
+zehnten besuchten Stadt 5.000 pro Stadt ab, und `tradeShipSpawnRate()` flacht
+über eine Sigmoid bei 400 Schiffen ab. Die 15. Fabrik ist also nicht zu stark — sie
+ist **wertlos**. Nur steht das nirgends im Spiel, sondern in Formeln, die
+niemand ablesen kann.
+
+Dazu kommt: Baukosten laufen gegen eine Decke (`Math.min(1_000_000, …)` in
+`Config.ts:439ff`), und ein einmal gebautes Gebäude wird nie zur Last. Es gibt
+also nie einen Grund, zwischen bestehenden Dingen abzuwägen oder etwas
+aufzugeben. Kein Druck, nur stille Vergeudung.
+
+Wichtig für den Entwurf: **Städte erzeugen überhaupt kein Gold.**
+`cityTroopIncrease()` wird ausschließlich in `maxTroops()` benutzt — Städte
+heben die Truppenobergrenze. Gold kommt aus dem Grundeinkommen, aus
+Handelsschiffen (Häfen) und Zügen (Fabriken).
+
+1. **★ Laufender Unterhalt — Baukostendeckel bleibt** (B) — Einmalkosten und
+   laufende Kosten haben zwei verschiedene Aufgaben: Baukosten begrenzen das
+   **Tempo**, Unterhalt begrenzt die **Größe**. Heute versucht die
+   Baukostenformel beides und scheitert am zweiten. Sobald der Unterhalt die
+   Größenbegrenzung übernimmt, darf der Deckel bleiben — eine Stadt für 50
+   Millionen wäre unlesbar und würde Fehler dauerhaft bestrafen.
+
+   ```
+   buildCost(n) = min(CAP, base * 2^n)              // unverändert
+   upkeep(n)    = UPKEEP_BASE * (1 + (n - 1) * SLOPE)
+   ```
+
+   Mit kleinem `SLOPE` (etwa 0,1) kostet das elfte Gebäude doppelten Unterhalt
+   gegenüber dem ersten — sanft und lesbar, aber wirksam, weil man es dauerhaft
+   zahlt. Der eigentliche Gewinn: Die Obergrenze **entsteht von selbst und
+   wandert mit der Wirtschaft**. Nicht „bei 12 Städten ist Schluss", sondern
+   „so viele, wie dein Einkommen trägt". Wachsender Handel trägt mehr;
+   verlorene Häfen machen das eigene Militär zur Last.
+
+   Abstufung nach Typ:
+   - **Städte** — höchster Unterhalt. Sie erzeugen kein Gold, nur
+     Truppenkapazität; daraus wird das klassische Wargame-Geschäft _deine
+     Armee kostet Geld_.
+   - **Häfen und Fabriken** — niedrig. Sie tragen sich früh selbst; der
+     Unterhalt sorgt nur dafür, dass die vorhandene Sättigung endlich wehtut,
+     statt bloß neutral zu sein.
+   - **Silos, SAMs, Verteidigungsposten** — mittel. Erzeugt „du kannst nicht
+     überall SAMs haben", was heute schlicht nicht stimmt.
+   - **Kriegsschiffe** — Unterhalt statt nur Baukosten. Der Preis ist ab dem
+     vierten Schiff bei 1 Mio gedeckelt, genau deshalb lohnt sich Spam.
+
+   Die Werte für `UPKEEP_BASE` und `SLOPE` nicht raten: Der Kalibrierungspunkt
+   ist die Gewinnschwelle ungefähr dort, wo der Ertrag ohnehin abflacht — bei
+   Fabriken also um 10 herum. Messbar mit der Balance-Arena (Punkt 79), und
+   deshalb erst danach bauen.
+
+2. **★ Unterhalt sichtbar machen, Stilllegung statt Zerstörung** (A) — die zwei
+   Details, an denen das System zwischen Tiefe und Frust entscheidet, und ohne
+   die Punkt 1 wertlos ist.
+
+   **Sichtbar:** im Baumenü neben dem Preis „125.000 — Unterhalt +5.000/min".
+   Damit wird aus einer unsichtbaren Ertragskurve eine ablesbare Entscheidung —
+   das ist die eigentliche Lösung des Kernproblems oben.
+
+   **Stilllegung:** Wer den Unterhalt nicht zahlen kann, dessen Gebäude
+   **werden stillgelegt, nicht zerstört** — sie produzieren nichts mehr, kosten
+   aber auch nichts, und laufen wieder an, sobald Gold da ist. Wer sich
+   übernimmt, wird ausgebremst, nicht gelöscht. Automatische Zerstörung wäre
+   die Todesspirale, an der Unterhaltssysteme üblicherweise scheitern.
+
 3. **Spezialisierung erzwingen** (B) — pro Region entweder Wirtschafts- oder
    Militärgebäude, nicht beides. Erzeugt Reichsprofile statt Einheitsbrei.
 4. **Ressourcenknoten auf der Karte** (C) — Öl, Eisen, Häfen mit Bonus. Gibt
@@ -249,7 +309,8 @@ Schwierigkeitsgrade sind nur Multiplikatoren (0.9 / 0.95 / 1.0 / 1.05).
 1. **Balance-Arena** (79) — macht alles andere billiger und sicherer
 2. **Angriffsdoktrinen** (11) — gibt der häufigsten Handlung im Spiel eine
    Entscheidung
-3. **Unterhaltskosten** (1) — gibt jedem Goldstück eine Entscheidung
+3. **Unterhaltskosten** (1 und 2) — gibt jedem Goldstück eine Entscheidung;
+   Punkt 2 ist Pflicht, nicht Kür
 4. **Cyber-Unterbau mit Zuordnung** (26, 27, 31) — das
    Alleinstellungsmerkmal, ohne neues Rendering
 5. **Tutorial** (63) — entscheidet darüber, ob überhaupt jemand bleibt
