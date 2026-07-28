@@ -67,6 +67,10 @@ Handelsschiffen (Häfen) und Zügen (Fabriken).
    Fabriken also um 10 herum. Messbar mit der Balance-Arena (Punkt 79), und
    deshalb erst danach bauen.
 
+   Ausbaustufe: ob der Unterhalt zusätzlich von der **Lage** abhängen soll,
+   behandelt `docs/Geowirtschaft.md` — Anbindung an Schiene, Häfen und Städte.
+   Erst dieses flache Modell einregeln, dann Geografie ergänzen.
+
 2. **★ Unterhalt sichtbar machen, Stilllegung statt Zerstörung** (A) — die zwei
    Details, an denen das System zwischen Tiefe und Frust entscheidet, und ohne
    die Punkt 1 wertlos ist.
