@@ -90,4 +90,17 @@ else
 fi
 EOF
 RUN chmod +x /usr/local/bin/start.sh
+
+# nginx is the only port meant to be reached from outside; it fronts the master
+# (3000) and routes the /wN/ paths to the workers (3001+). Reverse proxies that
+# derive the backend port from the image (Traefik behind Coolify, for example)
+# have nothing to go on without this and end up with an empty backend.
+EXPOSE 80
+
+# Lets the container report its own health instead of only "running". The
+# endpoint is served by the master and answers 503 until the lobby service is
+# ready, so a proxy can hold traffic back during startup.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -fsS http://127.0.0.1/api/health || exit 1
+
 ENTRYPOINT ["/usr/local/bin/start.sh"]
